@@ -198,31 +198,36 @@ function candidateRecursOnDate(candidate: {
 }
 
 /**
- * When a parent adds a one-off event for a single day ("Charlie chez Papi
- * mercredi 30 exceptionnellement") that fully or partly covers the time
- * range of a standing recurring event for the same child(ren) on that
- * same day, the recurring event's occurrence on that one date is
- * suppressed — otherwise both would show up side by side on the calendar
- * for that day. Unlike trimSupersededRecurringEvents, this never touches
- * the recurring schedule itself: no weekday is removed and no other
- * occurrence is affected, only this single date is excluded.
+ * When a parent adds a one-off event ("Charlie chez Papi mercredi 30
+ * exceptionnellement") — a single day, or a simple consecutive-day range
+ * (DAILY recurrence, e.g. "Charlie chez Papi du 30 au 2") — that fully or
+ * partly covers the time range of a standing recurring event for the same
+ * child(ren) on any day it spans, that recurring event's occurrence on
+ * each affected date is suppressed — otherwise both would show up side by
+ * side on the calendar. Unlike trimSupersededRecurringEvents, this never
+ * touches the recurring schedule itself: no weekday is removed and no
+ * other occurrence is affected, only the specific dates covered by the
+ * new event are excluded.
  *
  * Same guardrail as trimSupersededRecurringEvents: only trims a candidate
  * whose children are a subset of the new event's children.
  */
 async function applyOneOffException(params: {
   familyId: string;
+  excludeEventId?: string;
   childIds: string[];
   startAt: Date;
   endAt: Date;
+  /** Inclusive last date of the new event's range, for a DAILY (multi-day) event. Defaults to startAt's date. */
+  rangeEndDate?: Date | null;
 }): Promise<void> {
   const newStartMin = timeOfDayMinutes(params.startAt);
   const newEndMin = timeOfDayMinutes(params.endAt);
-  const exceptionDate = dateOnlyUTC(params.startAt);
 
   const candidates = await prisma.event.findMany({
     where: {
       familyId: params.familyId,
+      id: params.excludeEventId ? { not: params.excludeEventId } : undefined,
       recurrenceFrequency: { in: ["WEEKLY", "DAILY"] },
       children: { some: { childId: { in: params.childIds } } },
     },
@@ -232,50 +237,59 @@ async function applyOneOffException(params: {
     },
   });
 
-  for (const candidate of candidates) {
-    const candidateChildIds = candidate.children.map((c) => c.childId);
-    const isSubsetOfNewEvent = candidateChildIds.every((id) => params.childIds.includes(id));
-    if (!isSubsetOfNewEvent) continue;
-    if (!candidateRecursOnDate(candidate, params.startAt)) continue;
+  const firstDate = dateOnlyUTC(params.startAt);
+  const lastDate = params.rangeEndDate ? dateOnlyUTC(params.rangeEndDate) : firstDate;
 
-    const candStartMin = timeOfDayMinutes(candidate.startAt);
-    const candEndMin = timeOfDayMinutes(candidate.endAt);
-    if (!timeRangesOverlap(newStartMin, newEndMin, candStartMin, candEndMin)) continue;
+  for (
+    const exceptionDate = new Date(firstDate);
+    exceptionDate.getTime() <= lastDate.getTime();
+    exceptionDate.setUTCDate(exceptionDate.getUTCDate() + 1)
+  ) {
+    for (const candidate of candidates) {
+      const candidateChildIds = candidate.children.map((c) => c.childId);
+      const isSubsetOfNewEvent = candidateChildIds.every((id) => params.childIds.includes(id));
+      if (!isSubsetOfNewEvent) continue;
+      if (!candidateRecursOnDate(candidate, exceptionDate)) continue;
 
-    const alreadyExcluded = candidate.excludedDates.some((d) => dateOnlyUTC(d).getTime() === exceptionDate.getTime());
-    if (!alreadyExcluded) {
-      await prisma.event.update({
-        where: { id: candidate.id },
-        data: { excludedDates: { push: exceptionDate } },
-      });
-    }
+      const candStartMin = timeOfDayMinutes(candidate.startAt);
+      const candEndMin = timeOfDayMinutes(candidate.endAt);
+      if (!timeRangesOverlap(newStartMin, newEndMin, candStartMin, candEndMin)) continue;
 
-    // The portion of the candidate's daily range the new event does NOT
-    // cover, surviving as its own one-off event for this single date only.
-    const remainderPieces: Array<[number, number]> = [];
-    if (newStartMin > candStartMin) remainderPieces.push([candStartMin, Math.min(newStartMin, candEndMin)]);
-    if (newEndMin < candEndMin) remainderPieces.push([Math.max(newEndMin, candStartMin), candEndMin]);
+      const alreadyExcluded = candidate.excludedDates.some((d) => dateOnlyUTC(d).getTime() === exceptionDate.getTime());
+      if (!alreadyExcluded) {
+        await prisma.event.update({
+          where: { id: candidate.id },
+          data: { excludedDates: { push: exceptionDate } },
+        });
+      }
 
-    for (const [pieceStart, pieceEnd] of remainderPieces) {
-      if (pieceEnd <= pieceStart) continue;
-      const remainderStart = new Date(exceptionDate);
-      remainderStart.setUTCHours(Math.floor(pieceStart / 60), pieceStart % 60, 0, 0);
-      const remainderEnd = new Date(exceptionDate);
-      remainderEnd.setUTCHours(Math.floor(pieceEnd / 60), pieceEnd % 60, 0, 0);
+      // The portion of the candidate's daily range the new event does NOT
+      // cover, surviving as its own one-off event for this single date only.
+      const remainderPieces: Array<[number, number]> = [];
+      if (newStartMin > candStartMin) remainderPieces.push([candStartMin, Math.min(newStartMin, candEndMin)]);
+      if (newEndMin < candEndMin) remainderPieces.push([Math.max(newEndMin, candStartMin), candEndMin]);
 
-      await prisma.event.create({
-        data: {
-          familyId: params.familyId,
-          type: candidate.type,
-          startAt: remainderStart,
-          endAt: remainderEnd,
-          location: candidate.location,
-          notes: candidate.notes,
-          createdBy: candidate.createdBy,
-          children: { create: candidateChildIds.map((childId) => ({ childId })) },
-          caregivers: { create: candidate.caregivers.map((c) => ({ caregiverId: c.caregiverId })) },
-        },
-      });
+      for (const [pieceStart, pieceEnd] of remainderPieces) {
+        if (pieceEnd <= pieceStart) continue;
+        const remainderStart = new Date(exceptionDate);
+        remainderStart.setUTCHours(Math.floor(pieceStart / 60), pieceStart % 60, 0, 0);
+        const remainderEnd = new Date(exceptionDate);
+        remainderEnd.setUTCHours(Math.floor(pieceEnd / 60), pieceEnd % 60, 0, 0);
+
+        await prisma.event.create({
+          data: {
+            familyId: params.familyId,
+            type: candidate.type,
+            startAt: remainderStart,
+            endAt: remainderEnd,
+            location: candidate.location,
+            notes: candidate.notes,
+            createdBy: candidate.createdBy,
+            children: { create: candidateChildIds.map((childId) => ({ childId })) },
+            caregivers: { create: candidate.caregivers.map((c) => ({ caregiverId: c.caregiverId })) },
+          },
+        });
+      }
     }
   }
 }
@@ -327,12 +341,14 @@ export async function createEvent(input: EventInput): Promise<EventDTO> {
       startAt: input.startAt,
       endAt: input.endAt,
     });
-  } else if (!input.recurrence) {
+  } else if (!input.recurrence || input.recurrence.frequency === "DAILY") {
     await applyOneOffException({
       familyId: user.familyId,
+      excludeEventId: row.id,
       childIds: input.childIds,
       startAt: input.startAt,
       endAt: input.endAt,
+      rangeEndDate: input.recurrence?.endDate ?? null,
     });
   }
 
@@ -379,12 +395,14 @@ export async function updateEvent(eventId: string, input: EventInput): Promise<E
       startAt: input.startAt,
       endAt: input.endAt,
     });
-  } else if (!input.recurrence) {
+  } else if (!input.recurrence || input.recurrence.frequency === "DAILY") {
     await applyOneOffException({
       familyId: user.familyId,
+      excludeEventId: row.id,
       childIds: input.childIds,
       startAt: input.startAt,
       endAt: input.endAt,
+      rangeEndDate: input.recurrence?.endDate ?? null,
     });
   }
 
