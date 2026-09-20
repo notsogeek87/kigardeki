@@ -38,7 +38,8 @@ function parseInput(formData: FormData) {
 }
 
 const scheduleSchema = z.object({
-  scheduleType: z.enum(["NONE", "SCHOOL", "DAYCARE"]).default("NONE"),
+  scheduleType: z.enum(["NONE", "SCHOOL", "DAYCARE", "CAREGIVING"]).default("NONE"),
+  scheduleCaregiverId: z.string().optional(),
   scheduleDays: z.array(z.string()).optional(),
   scheduleStartTime: z.string().optional(),
   scheduleEndTime: z.string().optional(),
@@ -54,6 +55,7 @@ async function createDefaultScheduleIfRequested(
 ): Promise<void> {
   const parsed = scheduleSchema.parse({
     scheduleType: formData.get("scheduleType") || "NONE",
+    scheduleCaregiverId: formData.get("scheduleCaregiverId") || undefined,
     scheduleDays: formData.getAll("scheduleDays").map(String),
     scheduleStartTime: formData.get("scheduleStartTime") || undefined,
     scheduleEndTime: formData.get("scheduleEndTime") || undefined,
@@ -62,6 +64,7 @@ async function createDefaultScheduleIfRequested(
   });
 
   if (parsed.scheduleType === "NONE") return;
+  if (parsed.scheduleType === "CAREGIVING" && !parsed.scheduleCaregiverId) return;
 
   const days = (parsed.scheduleDays ?? []).map(Number).filter((n) => !Number.isNaN(n));
   const startDate = parsed.scheduleStartDate;
@@ -76,7 +79,7 @@ async function createDefaultScheduleIfRequested(
     endAt: combineDateAndTime(startDate, endTime),
     location,
     childIds: [childId],
-    caregiverIds: [],
+    caregiverIds: parsed.scheduleCaregiverId ? [parsed.scheduleCaregiverId] : [],
     recurrence: {
       frequency: "WEEKLY",
       daysOfWeek: days,
