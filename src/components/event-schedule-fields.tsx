@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { WEEKDAY_CHECKBOX_LABELS } from "@/lib/labels";
 import { TimeSlotCheckboxes } from "@/components/time-slot-checkboxes";
 import type { TimeSlot } from "@/lib/time-slots";
@@ -35,18 +35,40 @@ export function EventScheduleFields({
   defaultRecurrenceEndDate: string;
 }) {
   const [recurring, setRecurring] = useState(defaultRecurring);
+  const dateStartRef = useRef<HTMLInputElement>(null);
+  const dateEndRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-sm font-medium text-slate-700">Date de début</span>
-          <input type="date" name="date" required defaultValue={defaultDateStart} className={INPUT_CLASS} />
+          <input
+            ref={dateStartRef}
+            type="date"
+            name="date"
+            required
+            defaultValue={defaultDateStart}
+            className={INPUT_CLASS}
+          />
         </label>
         {!recurring && (
           <label className="flex flex-1 flex-col gap-1">
             <span className="text-sm font-medium text-slate-700">Date de fin (optionnel)</span>
-            <input type="date" name="dateEnd" defaultValue={defaultDateEnd} className={INPUT_CLASS} />
+            <input
+              ref={dateEndRef}
+              type="date"
+              name="dateEnd"
+              defaultValue={defaultDateEnd}
+              onFocus={() => {
+                const endInput = dateEndRef.current;
+                const startValue = dateStartRef.current?.value;
+                if (endInput && !endInput.value && startValue) {
+                  endInput.value = startValue;
+                }
+              }}
+              className={INPUT_CLASS}
+            />
           </label>
         )}
       </div>
