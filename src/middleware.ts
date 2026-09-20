@@ -14,6 +14,7 @@ export default auth((req) => {
   const isPublic =
     PUBLIC_PATHS.includes(pathname) ||
     pathname.startsWith("/invite/") ||
+    pathname.startsWith("/share/") ||
     pathname.startsWith("/api/auth");
 
   if (!req.auth && !isPublic) {

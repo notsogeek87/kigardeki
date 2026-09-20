@@ -22,6 +22,12 @@ export async function listCaregivers(): Promise<CaregiverDTO[]> {
   return rows.map(toCaregiverDTO);
 }
 
+/** No session check — see listChildrenForFamily in children.ts for the trust boundary. */
+export async function listCaregiversForFamily(familyId: string): Promise<CaregiverDTO[]> {
+  const rows = await prisma.caregiver.findMany({ where: { familyId }, orderBy: { createdAt: "asc" } });
+  return rows.map(toCaregiverDTO);
+}
+
 export async function getCaregiver(caregiverId: string): Promise<CaregiverDTO | null> {
   const user = await requireSession();
   const row = await prisma.caregiver.findUnique({ where: { id: caregiverId } });

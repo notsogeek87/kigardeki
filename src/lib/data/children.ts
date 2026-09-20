@@ -22,6 +22,17 @@ export async function listChildren(): Promise<ChildDTO[]> {
   return rows.map(toChildDTO);
 }
 
+/**
+ * No session check — for the public /share/[token] read-only page ONLY,
+ * where the family id has already been authorized by resolving a valid,
+ * non-revoked ShareLink token. Never call this from an authenticated
+ * route with a caller-supplied familyId.
+ */
+export async function listChildrenForFamily(familyId: string): Promise<ChildDTO[]> {
+  const rows = await prisma.child.findMany({ where: { familyId }, orderBy: { createdAt: "asc" } });
+  return rows.map(toChildDTO);
+}
+
 export async function getChild(childId: string): Promise<ChildDTO | null> {
   const user = await requireSession();
   const row = await prisma.child.findUnique({ where: { id: childId } });

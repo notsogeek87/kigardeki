@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { requireParent, requireSession } from "@/lib/permissions";
 import { hashPassword } from "@/lib/data/users";
 import { encrypt } from "@/lib/crypto";
+import { createShareLink, revokeShareLink } from "@/lib/data/shareLinks";
 
 const schema = z.object({
   currentPassword: z.string().min(1, "Mot de passe actuel requis."),
@@ -48,5 +50,17 @@ export async function renameFamilyAction(formData: FormData): Promise<void> {
   }
 
   await prisma.family.update({ where: { id: user.familyId }, data: { name: encrypt(parsed.data.name) } });
+  redirect("/settings?success=1");
+}
+
+export async function createShareLinkAction(): Promise<void> {
+  await createShareLink();
+  revalidatePath("/settings");
+  redirect("/settings?success=1");
+}
+
+export async function revokeShareLinkAction(id: string): Promise<void> {
+  await revokeShareLink(id);
+  revalidatePath("/settings");
   redirect("/settings?success=1");
 }

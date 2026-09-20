@@ -54,6 +54,7 @@ model Family {
   caregivers  Caregiver[]
   events      Event[]
   invitations Invitation[]
+  shareLinks  ShareLink[]
 }
 
 model User {
@@ -67,10 +68,11 @@ model User {
   familyId     String
   createdAt    DateTime @default(now())
 
-  family           Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family           Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
   caregiverProfile Caregiver?
-  createdEvents    Event[]    @relation("EventCreatedBy")
+  createdEvents    Event[]      @relation("EventCreatedBy")
   invitationsSent  Invitation[]
+  shareLinksCreated ShareLink[]
 
   @@index([familyId])
 }
@@ -173,6 +175,27 @@ model EventCaregiver {
 
   @@id([eventId, caregiverId])
   @@index([caregiverId])
+}
+
+/**
+ * A revocable, unauthenticated read-only link to a family's planning
+ * (see /share/[token]). This is a deliberate, opt-in exception to "no
+ * public family data" — created explicitly by a parent, for their own
+ * family, and revocable at any time. The token is the only credential;
+ * treat it like a password (long, random, never guessable).
+ */
+model ShareLink {
+  id        String    @id @default(cuid())
+  familyId  String
+  token     String    @unique
+  createdBy String
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [createdBy], references: [id])
+
+  @@index([familyId])
 }
 
 model Invitation {

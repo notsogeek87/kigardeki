@@ -30,12 +30,10 @@ const EVENT_INCLUDE = {
 
 export type EventOccurrenceDTO = EventDTO & { occurrenceDate: string; occurrenceStartAt: Date; occurrenceEndAt: Date };
 
-export async function listEventOccurrences(rangeStart: Date, rangeEnd: Date): Promise<EventOccurrenceDTO[]> {
-  const user = await requireSession();
-
+async function fetchOccurrences(familyId: string, rangeStart: Date, rangeEnd: Date): Promise<EventOccurrenceDTO[]> {
   const rows = await prisma.event.findMany({
     where: {
-      familyId: user.familyId,
+      familyId,
       startAt: { lt: rangeEnd },
       OR: [{ recurrenceFrequency: null }, { recurrenceEndDate: null }, { recurrenceEndDate: { gte: rangeStart } }],
     },
@@ -54,6 +52,20 @@ export async function listEventOccurrences(rangeStart: Date, rangeEnd: Date): Pr
 
   results.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
   return results;
+}
+
+export async function listEventOccurrences(rangeStart: Date, rangeEnd: Date): Promise<EventOccurrenceDTO[]> {
+  const user = await requireSession();
+  return fetchOccurrences(user.familyId, rangeStart, rangeEnd);
+}
+
+/** No session check — see listChildrenForFamily in children.ts for the trust boundary. */
+export async function listEventOccurrencesForFamily(
+  familyId: string,
+  rangeStart: Date,
+  rangeEnd: Date
+): Promise<EventOccurrenceDTO[]> {
+  return fetchOccurrences(familyId, rangeStart, rangeEnd);
 }
 
 export async function getEvent(eventId: string): Promise<EventDTO | null> {

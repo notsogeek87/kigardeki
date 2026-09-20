@@ -30,7 +30,9 @@ Ce projet gère des données concernant des enfants ; la sécurité n'est pas
 une option :
 
 - **Authentification obligatoire** partout (middleware Next.js) sauf
-  `/login`, `/register`, `/invite/:token`.
+  `/login`, `/register`, `/invite/:token`, et `/share/:token` (voir
+  ci-dessous — exception délibérée et opt-in, pas un accès public par
+  défaut).
 - **Autorisation strictement côté serveur** : chaque Server Action et chaque
   fonction de `src/lib/data/*` passe par `requireSession()` /
   `requireParent()` (voir `src/lib/permissions.ts`). Masquer un bouton côté
@@ -52,6 +54,12 @@ une option :
   planning sans gain de confidentialité réel.
 - Les mots de passe sont hachés avec **bcrypt** (jamais « chiffrés » de
   façon réversible).
+- **Partage public en lecture seule (`/share/:token`)** : un parent peut
+  générer un lien sans authentification pour laisser des tiers consulter le
+  planning. C'est une exception délibérée et **opt-in** au principe
+  « aucune donnée publique » — jamais activée par défaut, révocable à tout
+  moment (`Réglages`), et le jeton (24 octets aléatoires) est le seul
+  élément d'accès : à traiter comme un mot de passe.
 
 ## Démarrage local
 
