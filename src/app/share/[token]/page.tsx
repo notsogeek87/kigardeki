@@ -2,16 +2,18 @@ import Link from "next/link";
 import { resolveShareToken } from "@/lib/data/shareLinks";
 import { listChildrenForFamily } from "@/lib/data/children";
 import { listCaregiversForFamily } from "@/lib/data/caregivers";
-import { listEventOccurrencesForFamily } from "@/lib/data/events";
+import { listEventOccurrencesForFamily, type EventOccurrenceDTO } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
-import { formatSlotOrTimeShort } from "@/lib/time-slots";
 import {
   addUTCDays,
   formatDateLong,
   formatDateShort,
+  startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
 } from "@/lib/wall-time";
+
+type View = "day" | "week" | "month";
 
 function parseDate(value: string | undefined): Date {
   if (!value) return new Date();
@@ -40,7 +42,7 @@ export default async function SharedPlanningPage({
   }
 
   const sp = await searchParams;
-  const view = sp.view === "day" ? "day" : "week";
+  const view: View = sp.view === "day" || sp.view === "month" ? sp.view : "week";
   const anchor = parseDate(sp.date);
 
   const [children, caregivers] = await Promise.all([
@@ -57,7 +59,7 @@ export default async function SharedPlanningPage({
 
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-4">
         <div className="flex rounded-xl bg-slate-100 p-1">
-          {(["day", "week"] as const).map((v) => (
+          {(["day", "week", "month"] as const).map((v) => (
             <Link
               key={v}
               href={`/share/${token}?view=${v}&date=${toDateInputValue(anchor)}`}
@@ -65,7 +67,7 @@ export default async function SharedPlanningPage({
                 view === v ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
               }`}
             >
-              {v === "day" ? "Jour" : "Semaine"}
+              {v === "day" ? "Jour" : v === "week" ? "Semaine" : "Mois"}
             </Link>
           ))}
         </div>
@@ -76,10 +78,34 @@ export default async function SharedPlanningPage({
           </p>
         ) : view === "day" ? (
           <DayView token={token} anchor={anchor} familyId={share.familyId} children_={children} caregivers={caregivers} />
+        ) : view === "week" ? (
+          <WeekView token={token} anchor={anchor} familyId={share.familyId} children_={children} caregivers={caregivers} />
         ) : (
-          <WeekView token={token} anchor={anchor} familyId={share.familyId} children_={children} />
+          <MonthView token={token} anchor={anchor} familyId={share.familyId} />
         )}
       </div>
+    </div>
+  );
+}
+
+function NavArrows({ token, view, prev, next, label }: { token: string; view: View; prev: Date; next: Date; label: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <Link
+        href={`/share/${token}?view=${view}&date=${toDateInputValue(prev)}`}
+        className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
+        aria-label="Précédent"
+      >
+        ←
+      </Link>
+      <p className="font-medium capitalize text-slate-700">{label}</p>
+      <Link
+        href={`/share/${token}?view=${view}&date=${toDateInputValue(next)}`}
+        className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
+        aria-label="Suivant"
+      >
+        →
+      </Link>
     </div>
   );
 }
@@ -105,21 +131,13 @@ async function DayView({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <Link
-          href={`/share/${token}?view=day&date=${toDateInputValue(addUTCDays(dayStart, -1))}`}
-          className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
-        >
-          ←
-        </Link>
-        <p className="font-medium capitalize text-slate-700">{formatDateLong(dayStart)}</p>
-        <Link
-          href={`/share/${token}?view=day&date=${toDateInputValue(addUTCDays(dayStart, 1))}`}
-          className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
-        >
-          →
-        </Link>
-      </div>
+      <NavArrows
+        token={token}
+        view="day"
+        prev={addUTCDays(dayStart, -1)}
+        next={addUTCDays(dayStart, 1)}
+        label={formatDateLong(dayStart)}
+      />
 
       {occurrences.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">Rien de prévu ce jour.</p>
@@ -137,97 +155,127 @@ async function WeekView({
   anchor,
   familyId,
   children_,
+  caregivers,
 }: {
   token: string;
   anchor: Date;
   familyId: string;
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
+  caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
 }) {
   const weekStart = startOfUTCWeek(anchor);
   const weekEnd = addUTCDays(weekStart, 7);
   const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
   const occurrences = await listEventOccurrencesForFamily(familyId, weekStart, weekEnd);
 
-  const byChildAndDay = new Map<string, Map<string, typeof occurrences>>();
-  for (const child of children_) byChildAndDay.set(child.id, new Map());
+  const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
-    for (const childId of occ.childIds) {
-      const dayMap = byChildAndDay.get(childId);
-      if (!dayMap) continue;
-      const key = occ.occurrenceDate;
-      if (!dayMap.has(key)) dayMap.set(key, []);
-      dayMap.get(key)!.push(occ);
-    }
+    const key = occ.occurrenceDate;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(occ);
   }
+  for (const dayOccurrences of byDay.values()) {
+    dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+  }
+
+  const todayKey = toDateInputValue(new Date());
+
+  return (
+    <div className="flex flex-col gap-4">
+      <NavArrows
+        token={token}
+        view="week"
+        prev={addUTCDays(weekStart, -7)}
+        next={addUTCDays(weekStart, 7)}
+        label={`${formatDateShort(weekStart)} — ${formatDateShort(addUTCDays(weekStart, 6))}`}
+      />
+
+      <div className="flex flex-col gap-4">
+        {days.map((d) => {
+          const key = toDateInputValue(d);
+          const dayOccurrences = byDay.get(key) ?? [];
+          const isToday = key === todayKey;
+          return (
+            <div key={key} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-1">
+                <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                  {formatDateLong(d)}
+                </p>
+                {isToday && (
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                    Aujourd&apos;hui
+                  </span>
+                )}
+              </div>
+              {dayOccurrences.length === 0 ? (
+                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {dayOccurrences.map((occ, i) => (
+                    <OccurrenceCard
+                      key={`${occ.id}-${i}`}
+                      occurrence={occ}
+                      familyChildren={children_}
+                      caregivers={caregivers}
+                      editable={false}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+async function MonthView({ token, anchor, familyId }: { token: string; anchor: Date; familyId: string }) {
+  const monthStart = startOfUTCMonth(anchor);
+  const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
+  const gridStart = startOfUTCWeek(monthStart);
+  const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
+
+  const occurrences = await listEventOccurrencesForFamily(familyId, gridStart, gridEnd);
+  const countByDay = new Map<string, number>();
+  for (const occ of occurrences) {
+    countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
+  }
+
+  const days: Date[] = [];
+  for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
+
+  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    monthStart
+  );
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <Link
-          href={`/share/${token}?view=week&date=${toDateInputValue(addUTCDays(weekStart, -7))}`}
-          className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
-        >
-          ←
-        </Link>
-        <p className="font-medium text-slate-700">
-          {formatDateShort(weekStart)} — {formatDateShort(addUTCDays(weekStart, 6))}
-        </p>
-        <Link
-          href={`/share/${token}?view=week&date=${toDateInputValue(addUTCDays(weekStart, 7))}`}
-          className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
-        >
-          →
-        </Link>
-      </div>
+      <NavArrows token={token} view="month" prev={addUTCDays(monthStart, -1)} next={nextMonthStart} label={monthLabel} />
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-10 min-w-[88px] bg-white p-2 text-left text-xs font-semibold text-slate-400">
-                &nbsp;
-              </th>
-              {days.map((d) => (
-                <th key={toDateInputValue(d)} className="min-w-[100px] p-2 text-center text-xs font-semibold text-slate-500">
-                  {formatDateShort(d)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {children_.map((child) => (
-              <tr key={child.id} className="border-t border-slate-100">
-                <td className="sticky left-0 z-10 bg-white p-2 align-top">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: child.color }} />
-                    {child.firstName}
-                  </span>
-                </td>
-                {days.map((d) => {
-                  const key = toDateInputValue(d);
-                  const dayOccurrences = (byChildAndDay.get(child.id)?.get(key) ?? []).sort(
-                    (a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime()
-                  );
-                  return (
-                    <td key={key} className="p-1.5 align-top">
-                      <div className="flex flex-col gap-1">
-                        {dayOccurrences.map((occ, i) => (
-                          <span
-                            key={`${occ.id}-${i}`}
-                            className="rounded-lg px-1.5 py-1 text-[11px] leading-tight text-white"
-                            style={{ backgroundColor: child.color }}
-                          >
-                            {formatSlotOrTimeShort(occ.occurrenceStartAt, occ.occurrenceEndAt)}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+          <div key={i} className="pb-1 text-center text-xs font-semibold text-slate-400">
+            {d}
+          </div>
+        ))}
+        {days.map((d) => {
+          const key = toDateInputValue(d);
+          const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
+          const count = countByDay.get(key) ?? 0;
+          return (
+            <Link
+              key={key}
+              href={`/share/${token}?view=day&date=${key}`}
+              className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
+                inMonth ? "text-slate-700" : "text-slate-300"
+              }`}
+            >
+              {d.getUTCDate()}
+              {count > 0 && <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-brand-500" />}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
