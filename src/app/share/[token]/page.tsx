@@ -78,6 +78,8 @@ export default async function SharedPlanningPage({
       </header>
 
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-4">
+        {children.length > 0 && <PlanningFilters children_={children} caregivers={caregivers} />}
+
         <div className="flex rounded-xl bg-slate-100 p-1">
           {(["day", "week", "month"] as const).map((v) => (
             <Link
@@ -91,8 +93,6 @@ export default async function SharedPlanningPage({
             </Link>
           ))}
         </div>
-
-        {children.length > 0 && <PlanningFilters children_={children} caregivers={caregivers} />}
 
         {children.length === 0 ? (
           <p className="rounded-2xl bg-white p-6 text-center text-slate-500 shadow-sm">
@@ -125,6 +125,7 @@ export default async function SharedPlanningPage({
             token={token}
             anchor={anchor}
             familyId={share.familyId}
+            children_={children}
             caregivers={caregivers}
             childId={childId}
             caregiverId={caregiverId}
@@ -325,6 +326,7 @@ async function MonthView({
   token,
   anchor,
   familyId,
+  children_,
   caregivers,
   childId,
   caregiverId,
@@ -333,6 +335,7 @@ async function MonthView({
   token: string;
   anchor: Date;
   familyId: string;
+  children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
   caregiverId: string | undefined;
@@ -340,6 +343,80 @@ async function MonthView({
 }) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
+  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    monthStart
+  );
+
+  if (caregiverId) {
+    const occurrences = filterOccurrences(
+      await listEventOccurrencesForFamily(familyId, monthStart, nextMonthStart),
+      childId,
+      caregiverId
+    );
+    const byDay = new Map<string, EventOccurrenceDTO[]>();
+    for (const occ of occurrences) {
+      const key = occ.occurrenceDate;
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key)!.push(occ);
+    }
+    const sortedDays = Array.from(byDay.keys()).sort();
+    for (const dayOccurrences of byDay.values()) {
+      dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+    }
+    const todayKey = toDateInputValue(new Date());
+
+    return (
+      <div className="flex flex-col gap-4">
+        <NavArrows
+          token={token}
+          view="month"
+          prev={addUTCDays(monthStart, -1)}
+          next={nextMonthStart}
+          label={monthLabel}
+          query={query}
+        />
+
+        {sortedDays.length === 0 ? (
+          <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
+            Cette personne ne garde pas d&apos;enfant ce mois-ci.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {sortedDays.map((key) => {
+              const d = new Date(`${key}T00:00:00.000Z`);
+              const isToday = key === todayKey;
+              return (
+                <div key={key} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 px-1">
+                    <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                      {formatDateLong(d)}
+                    </p>
+                    {isToday && (
+                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                        Aujourd&apos;hui
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {byDay.get(key)!.map((occ, i) => (
+                      <OccurrenceCard
+                        key={`${occ.id}-${i}`}
+                        occurrence={occ}
+                        familyChildren={children_}
+                        caregivers={caregivers}
+                        editable={false}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
@@ -362,10 +439,6 @@ async function MonthView({
 
   const days: Date[] = [];
   for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
-
-  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    monthStart
-  );
 
   return (
     <div className="flex flex-col gap-3">
