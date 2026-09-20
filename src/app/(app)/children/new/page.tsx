@@ -13,7 +13,7 @@ export default async function NewChildPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-bold text-slate-900">Ajouter un enfant</h1>
-      <ChildForm action={createChildAction} error={error} submitLabel="Ajouter" />
+      <ChildForm action={createChildAction} error={error} submitLabel="Ajouter" includeDefaultSchedule />
     </div>
   );
 }
