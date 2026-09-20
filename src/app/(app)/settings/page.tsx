@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/permissions";
 import { getMyFamily } from "@/lib/data/family";
 import { listShareLinks } from "@/lib/data/shareLinks";
+import { getAppUrl } from "@/lib/url";
 import { InstallPwaHint } from "@/components/install-pwa-hint";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { changePasswordAction, renameFamilyAction, createShareLinkAction, revokeShareLinkAction } from "./actions";
@@ -13,7 +14,7 @@ export default async function SettingsPage({
   const user = await requireSession();
   const family = await getMyFamily();
   const shareLinks = user.role === "PARENT" ? await listShareLinks() : [];
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await getAppUrl();
   const { error, success } = await searchParams;
 
   return (
