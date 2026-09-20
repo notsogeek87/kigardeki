@@ -80,7 +80,22 @@ export async function deleteChild(childId: string): Promise<void> {
   const user = await requireParent();
   const existing = await prisma.child.findUniqueOrThrow({ where: { id: childId } });
   assertSameFamily(user, existing.familyId);
-  await prisma.child.delete({ where: { id: childId } });
+
+  await prisma.$transaction(async (tx) => {
+    // Every event requires at least one child, so an event that was
+    // exclusively for this child becomes meaningless once it's gone.
+    // The child's onDelete: Cascade only drops the EventChild join row,
+    // leaving a childless, blank-titled event behind on the planning —
+    // delete those events too instead of orphaning them.
+    const orphanedEvents = await tx.event.findMany({
+      where: { children: { every: { childId }, some: {} } },
+      select: { id: true },
+    });
+    if (orphanedEvents.length > 0) {
+      await tx.event.deleteMany({ where: { id: { in: orphanedEvents.map((e) => e.id) } } });
+    }
+    await tx.child.delete({ where: { id: childId } });
+  });
 }
 
 export async function assertChildrenBelongToFamily(user: SessionUser, childIds: string[]): Promise<void> {

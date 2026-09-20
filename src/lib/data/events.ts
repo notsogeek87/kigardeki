@@ -87,7 +87,9 @@ function timeRangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: n
  * Deliberately narrow to avoid surprising, silent data loss:
  * - Only triggers when the *new* event is itself weekly-recurring. A
  *   one-off event (a single exceptional day) never mutates a standing
- *   recurring schedule — only another standing schedule can replace one.
+ *   recurring schedule's weekdays — only another standing schedule can do
+ *   that. A one-off event only excludes its own single date instead, via
+ *   applyOneOffException below.
  * - Only trims a candidate event whose children are a subset of the new
  *   event's children, so an event covering siblings not part of this
  *   change is left untouched.
@@ -175,6 +177,109 @@ async function trimSupersededRecurringEvents(params: {
   }
 }
 
+function dateOnlyUTC(d: Date): Date {
+  const r = new Date(d);
+  r.setUTCHours(0, 0, 0, 0);
+  return r;
+}
+
+function candidateRecursOnDate(candidate: {
+  startAt: Date;
+  recurrenceFrequency: RecurrenceFrequency | null;
+  recurrenceDaysOfWeek: number[];
+  recurrenceEndDate: Date | null;
+}, date: Date): boolean {
+  if (!candidate.recurrenceFrequency) return false;
+  const day = dateOnlyUTC(date);
+  if (day < dateOnlyUTC(candidate.startAt)) return false;
+  if (candidate.recurrenceEndDate && day > dateOnlyUTC(candidate.recurrenceEndDate)) return false;
+  if (candidate.recurrenceFrequency === "DAILY") return true;
+  return candidate.recurrenceDaysOfWeek.includes(date.getUTCDay());
+}
+
+/**
+ * When a parent adds a one-off event for a single day ("Charlie chez Papi
+ * mercredi 30 exceptionnellement") that fully or partly covers the time
+ * range of a standing recurring event for the same child(ren) on that
+ * same day, the recurring event's occurrence on that one date is
+ * suppressed — otherwise both would show up side by side on the calendar
+ * for that day. Unlike trimSupersededRecurringEvents, this never touches
+ * the recurring schedule itself: no weekday is removed and no other
+ * occurrence is affected, only this single date is excluded.
+ *
+ * Same guardrail as trimSupersededRecurringEvents: only trims a candidate
+ * whose children are a subset of the new event's children.
+ */
+async function applyOneOffException(params: {
+  familyId: string;
+  childIds: string[];
+  startAt: Date;
+  endAt: Date;
+}): Promise<void> {
+  const newStartMin = timeOfDayMinutes(params.startAt);
+  const newEndMin = timeOfDayMinutes(params.endAt);
+  const exceptionDate = dateOnlyUTC(params.startAt);
+
+  const candidates = await prisma.event.findMany({
+    where: {
+      familyId: params.familyId,
+      recurrenceFrequency: { in: ["WEEKLY", "DAILY"] },
+      children: { some: { childId: { in: params.childIds } } },
+    },
+    include: {
+      children: { select: { childId: true } },
+      caregivers: { select: { caregiverId: true } },
+    },
+  });
+
+  for (const candidate of candidates) {
+    const candidateChildIds = candidate.children.map((c) => c.childId);
+    const isSubsetOfNewEvent = candidateChildIds.every((id) => params.childIds.includes(id));
+    if (!isSubsetOfNewEvent) continue;
+    if (!candidateRecursOnDate(candidate, params.startAt)) continue;
+
+    const candStartMin = timeOfDayMinutes(candidate.startAt);
+    const candEndMin = timeOfDayMinutes(candidate.endAt);
+    if (!timeRangesOverlap(newStartMin, newEndMin, candStartMin, candEndMin)) continue;
+
+    const alreadyExcluded = candidate.excludedDates.some((d) => dateOnlyUTC(d).getTime() === exceptionDate.getTime());
+    if (!alreadyExcluded) {
+      await prisma.event.update({
+        where: { id: candidate.id },
+        data: { excludedDates: { push: exceptionDate } },
+      });
+    }
+
+    // The portion of the candidate's daily range the new event does NOT
+    // cover, surviving as its own one-off event for this single date only.
+    const remainderPieces: Array<[number, number]> = [];
+    if (newStartMin > candStartMin) remainderPieces.push([candStartMin, Math.min(newStartMin, candEndMin)]);
+    if (newEndMin < candEndMin) remainderPieces.push([Math.max(newEndMin, candStartMin), candEndMin]);
+
+    for (const [pieceStart, pieceEnd] of remainderPieces) {
+      if (pieceEnd <= pieceStart) continue;
+      const remainderStart = new Date(exceptionDate);
+      remainderStart.setUTCHours(Math.floor(pieceStart / 60), pieceStart % 60, 0, 0);
+      const remainderEnd = new Date(exceptionDate);
+      remainderEnd.setUTCHours(Math.floor(pieceEnd / 60), pieceEnd % 60, 0, 0);
+
+      await prisma.event.create({
+        data: {
+          familyId: params.familyId,
+          type: candidate.type,
+          startAt: remainderStart,
+          endAt: remainderEnd,
+          location: candidate.location,
+          notes: candidate.notes,
+          createdBy: candidate.createdBy,
+          children: { create: candidateChildIds.map((childId) => ({ childId })) },
+          caregivers: { create: candidate.caregivers.map((c) => ({ caregiverId: c.caregiverId })) },
+        },
+      });
+    }
+  }
+}
+
 export async function getEvent(eventId: string): Promise<EventDTO | null> {
   const user = await requireSession();
   const row = await prisma.event.findUnique({ where: { id: eventId }, include: EVENT_INCLUDE });
@@ -222,6 +327,13 @@ export async function createEvent(input: EventInput): Promise<EventDTO> {
       startAt: input.startAt,
       endAt: input.endAt,
     });
+  } else if (!input.recurrence) {
+    await applyOneOffException({
+      familyId: user.familyId,
+      childIds: input.childIds,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
   }
 
   return toEventDTO(row);
@@ -264,6 +376,13 @@ export async function updateEvent(eventId: string, input: EventInput): Promise<E
       excludeEventId: row.id,
       childIds: input.childIds,
       days: input.recurrence.daysOfWeek,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
+  } else if (!input.recurrence) {
+    await applyOneOffException({
+      familyId: user.familyId,
+      childIds: input.childIds,
       startAt: input.startAt,
       endAt: input.endAt,
     });

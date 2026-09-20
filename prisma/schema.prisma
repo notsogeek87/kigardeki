@@ -147,6 +147,12 @@ model Event {
   recurrenceFrequency  RecurrenceFrequency?
   recurrenceDaysOfWeek Int[]                @default([])
   recurrenceEndDate    DateTime?
+  /// Single calendar dates (UTC midnight) on which a recurring event does
+  /// NOT occur — e.g. a one-off "Charlie chez Papi mercredi 30
+  /// exceptionnellement" event excludes that one Wednesday from the
+  /// standing recurring schedule without touching any other occurrence.
+  /// Unused when recurrenceFrequency is null.
+  excludedDates DateTime[] @default([])
 
   createdBy String
   createdAt DateTime @default(now())

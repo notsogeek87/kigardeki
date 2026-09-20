@@ -272,4 +272,64 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
     const refreshed = await prisma.event.findUniqueOrThrow({ where: { id: daycare.id } });
     expect(refreshed.recurrenceDaysOfWeek.sort()).toEqual([1, 2, 3, 4, 5]);
   });
+
+  it("a one-off event excludes just that single date from a standing recurring schedule", async () => {
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    const child = await createChild({ firstName: "SingleDateException", color: "#7c3aed" });
+
+    // Standing "Parents" all-day caregiving, every day of the week.
+    const parents = await createEvent({
+      type: "PARENT",
+      startAt: new Date("2026-09-21T08:00:00Z"),
+      endAt: new Date("2026-09-21T19:00:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [0, 1, 2, 3, 4, 5, 6], endDate: null },
+    });
+
+    // Exceptionally, the grandfather takes over the whole day on
+    // Wednesday the 23rd only.
+    await createEvent({
+      type: "CAREGIVING",
+      startAt: new Date("2026-09-23T08:00:00Z"),
+      endAt: new Date("2026-09-23T19:00:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+    });
+
+    // The standing schedule keeps every weekday (no permanent change)...
+    const refreshedParents = await prisma.event.findUniqueOrThrow({ where: { id: parents.id } });
+    expect(refreshedParents.recurrenceDaysOfWeek.sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    // ...but that single Wednesday is excluded, so it no longer produces a
+    // duplicate occurrence alongside the one-off event.
+    expect(refreshedParents.excludedDates.map((d) => d.toISOString().slice(0, 10))).toEqual(["2026-09-23"]);
+  });
+
+  it("deleting a child also deletes events that were exclusively for that child", async () => {
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    const soloChild = await createChild({ firstName: "SoloOrphan", color: "#059669" });
+    const siblingChild = await createChild({ firstName: "SiblingKept", color: "#0284c7" });
+
+    const soloEvent = await createEvent({
+      type: "CAREGIVING",
+      startAt: new Date("2026-09-23T09:00:00Z"),
+      endAt: new Date("2026-09-23T12:00:00Z"),
+      childIds: [soloChild.id],
+      caregiverIds: [],
+    });
+    const sharedEvent = await createEvent({
+      type: "PARENT",
+      startAt: new Date("2026-09-24T09:00:00Z"),
+      endAt: new Date("2026-09-24T12:00:00Z"),
+      childIds: [soloChild.id, siblingChild.id],
+      caregiverIds: [],
+    });
+
+    await deleteChild(soloChild.id);
+
+    expect(await prisma.event.findUnique({ where: { id: soloEvent.id } })).toBeNull();
+    await prisma.event.findUniqueOrThrow({ where: { id: sharedEvent.id } });
+    const sharedLinks = await prisma.eventChild.findMany({ where: { eventId: sharedEvent.id } });
+    expect(sharedLinks.map((l) => l.childId)).toEqual([siblingChild.id]);
+  });
 });
