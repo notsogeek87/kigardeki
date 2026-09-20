@@ -3,12 +3,12 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
+import { authConfig } from "@/lib/auth.config";
 
+// Full config, Node.js runtime only (route handlers, server actions, RSCs).
+// See src/lib/auth.config.ts for why middleware must not import this file.
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -38,21 +38,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role;
-        token.familyId = user.familyId;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.sub as string;
-        session.user.role = token.role as "PARENT" | "VIEWER";
-        session.user.familyId = token.familyId as string;
-      }
-      return session;
-    },
-  },
 });

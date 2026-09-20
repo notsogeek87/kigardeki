@@ -1,10 +1,21 @@
-import { requireSession } from "@/lib/permissions";
+import { redirect } from "next/navigation";
+import { requireSession, UnauthorizedError } from "@/lib/permissions";
 import { getMyFamily } from "@/lib/data/family";
 import { TopBar } from "@/components/top-bar";
 import { BottomNav } from "@/components/bottom-nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireSession();
+  // Middleware is the primary gate; this is a defense-in-depth fallback so
+  // an edge case (e.g. a session expiring between the middleware check and
+  // this render) redirects cleanly instead of crashing the page.
+  let user;
+  try {
+    user = await requireSession();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) redirect("/login");
+    throw error;
+  }
+
   const family = await getMyFamily();
 
   return (

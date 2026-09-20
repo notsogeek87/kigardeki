@@ -1,5 +1,10 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { authConfig } from "@/lib/auth.config";
+
+// Deliberately built from the Edge-safe authConfig only — see
+// src/lib/auth.config.ts for why this must never import src/lib/auth.ts.
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PATHS = ["/login", "/register"];
 
