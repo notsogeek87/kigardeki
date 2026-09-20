@@ -92,7 +92,9 @@ export default async function PlanningPage({
           query={query}
         />
       )}
-      {view === "month" && <MonthView anchor={anchor} childId={childId} caregiverId={caregiverId} />}
+      {view === "month" && (
+        <MonthView anchor={anchor} childId={childId} caregiverId={caregiverId} caregivers={caregivers} />
+      )}
     </div>
   );
 }
@@ -299,10 +301,12 @@ async function MonthView({
   anchor,
   childId,
   caregiverId,
+  caregivers,
 }: {
   anchor: Date;
   childId: string | undefined;
   caregiverId: string | undefined;
+  caregivers: Awaited<ReturnType<typeof listCaregivers>>;
 }) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
@@ -311,8 +315,15 @@ async function MonthView({
 
   const occurrences = filterOccurrences(await listEventOccurrences(gridStart, gridEnd), childId, caregiverId);
   const countByDay = new Map<string, number>();
+  const colorsByDay = new Map<string, string[]>();
   for (const occ of occurrences) {
     countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
+    const dayColors = colorsByDay.get(occ.occurrenceDate) ?? [];
+    for (const caregiverIdForOcc of occ.caregiverIds) {
+      const color = caregivers.find((c) => c.id === caregiverIdForOcc)?.color;
+      if (color && !dayColors.includes(color)) dayColors.push(color);
+    }
+    colorsByDay.set(occ.occurrenceDate, dayColors);
   }
 
   const days: Date[] = [];
@@ -344,6 +355,7 @@ async function MonthView({
           const key = toDateInputValue(d);
           const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
           const count = countByDay.get(key) ?? 0;
+          const dayColors = colorsByDay.get(key) ?? [];
           return (
             <Link
               key={key}
@@ -353,7 +365,24 @@ async function MonthView({
               }`}
             >
               {d.getUTCDate()}
-              {count > 0 && <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-brand-500" />}
+              {count > 0 && (
+                <span className="mt-0.5 flex items-center gap-0.5">
+                  {dayColors.length > 0 ? (
+                    dayColors
+                      .slice(0, 3)
+                      .map((color, i) => (
+                        <span
+                          key={i}
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: color }}
+                          aria-hidden="true"
+                        />
+                      ))
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
+                  )}
+                </span>
+              )}
             </Link>
           );
         })}
