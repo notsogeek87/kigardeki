@@ -3,11 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { EventType } from "@prisma/client";
 import { createChild, deleteChild, updateChild } from "@/lib/data/children";
-import { createEvent } from "@/lib/data/events";
-import { combineDateAndTime } from "@/lib/wall-time";
-import { slotsToTimeRange, type TimeSlot } from "@/lib/time-slots";
 import { ForbiddenError, UnauthorizedError } from "@/lib/permissions";
 
 const schema = z.object({
@@ -38,57 +34,6 @@ function parseInput(formData: FormData) {
   };
 }
 
-const SLOTS = ["MORNING", "AFTERNOON"] as const;
-
-const scheduleSchema = z.object({
-  scheduleType: z.enum(["NONE", "SCHOOL", "DAYCARE", "CAREGIVING"]).default("NONE"),
-  scheduleCaregiverId: z.string().optional(),
-  scheduleDays: z.array(z.string()).optional(),
-  scheduleSlots: z.array(z.enum(SLOTS)).optional(),
-  scheduleStartDate: z.string().optional(),
-  scheduleEndDate: z.string().optional(),
-});
-
-/** Reads the optional "default schedule" fields from the new-child form (see ChildDefaultScheduleFields). */
-async function createDefaultScheduleIfRequested(
-  childId: string,
-  location: string | null,
-  formData: FormData
-): Promise<void> {
-  const parsed = scheduleSchema.parse({
-    scheduleType: formData.get("scheduleType") || "NONE",
-    scheduleCaregiverId: formData.get("scheduleCaregiverId") || undefined,
-    scheduleDays: formData.getAll("scheduleDays").map(String),
-    scheduleSlots: formData.getAll("scheduleSlots").map(String),
-    scheduleStartDate: formData.get("scheduleStartDate") || undefined,
-    scheduleEndDate: formData.get("scheduleEndDate") || undefined,
-  });
-
-  if (parsed.scheduleType === "NONE") return;
-  if (parsed.scheduleType === "CAREGIVING" && !parsed.scheduleCaregiverId) return;
-
-  const days = (parsed.scheduleDays ?? []).map(Number).filter((n) => !Number.isNaN(n));
-  const startDate = parsed.scheduleStartDate;
-  const slots = parsed.scheduleSlots ?? [];
-  if (days.length === 0 || !startDate || slots.length === 0) return;
-
-  const { startTime, endTime } = slotsToTimeRange(slots as TimeSlot[]);
-
-  await createEvent({
-    type: parsed.scheduleType as EventType,
-    startAt: combineDateAndTime(startDate, startTime),
-    endAt: combineDateAndTime(startDate, endTime),
-    location,
-    childIds: [childId],
-    caregiverIds: parsed.scheduleCaregiverId ? [parsed.scheduleCaregiverId] : [],
-    recurrence: {
-      frequency: "WEEKLY",
-      daysOfWeek: days,
-      endDate: parsed.scheduleEndDate ? combineDateAndTime(parsed.scheduleEndDate, "23:59") : null,
-    },
-  });
-}
-
 function redirectPath(childId: string, error: unknown): never {
   const message =
     error instanceof ForbiddenError || error instanceof UnauthorizedError
@@ -102,17 +47,7 @@ function redirectPath(childId: string, error: unknown): never {
 export async function createChildAction(formData: FormData): Promise<void> {
   try {
     const input = parseInput(formData);
-    const child = await createChild(input);
-
-    // Best-effort: the child is already created at this point, so a
-    // problem here shouldn't send the user back to a "create child" form
-    // that would just create a duplicate — it only means they'll add the
-    // schedule by hand from the Planning tab instead.
-    try {
-      await createDefaultScheduleIfRequested(child.id, input.defaultLocation, formData);
-    } catch {
-      // Ignored — see above.
-    }
+    await createChild(input);
   } catch (error) {
     redirectPath("", error);
   }

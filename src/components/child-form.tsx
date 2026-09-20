@@ -1,22 +1,16 @@
 import { ColorPickerField } from "@/components/color-picker";
-import { ChildDefaultScheduleFields } from "@/components/child-default-schedule-fields";
-import type { CaregiverDTO, ChildDTO } from "@/lib/data/dto";
+import type { ChildDTO } from "@/lib/data/dto";
 
 export function ChildForm({
   action,
   child,
   error,
   submitLabel,
-  includeDefaultSchedule = false,
-  caregivers = [],
 }: {
   action: (formData: FormData) => Promise<void>;
   child?: ChildDTO;
   error?: string;
   submitLabel: string;
-  /** Only meaningful when creating a brand-new child (see events/new logic in children/actions.ts). */
-  includeDefaultSchedule?: boolean;
-  caregivers?: CaregiverDTO[];
 }) {
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -72,8 +66,6 @@ export function ChildForm({
           className="rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
         />
       </label>
-
-      {includeDefaultSchedule && <ChildDefaultScheduleFields caregivers={caregivers} />}
 
       <button
         type="submit"
