@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { resolveShareToken } from "@/lib/data/shareLinks";
 import { listChildrenForFamily } from "@/lib/data/children";
@@ -32,7 +33,7 @@ export default async function SharedPlanningPage({
   if (!share) {
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-4xl">🔒</p>
+        <Image src="/logo.png" alt="Kigardeki" width={64} height={64} />
         <h1 className="text-xl font-semibold">Lien invalide ou révoqué</h1>
         <p className="text-slate-500">Demandez à la famille de vous envoyer un nouveau lien de partage.</p>
       </main>
@@ -50,9 +51,12 @@ export default async function SharedPlanningPage({
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
-      <header className="border-b border-slate-200 bg-white px-4 py-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-brand-600">Lecture seule</p>
-        <h1 className="text-lg font-bold text-slate-900">{share.familyName}</h1>
+      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-4">
+        <Image src="/logo.png" alt="Kigardeki" width={32} height={32} className="rounded-lg" />
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-brand-600">Lecture seule</p>
+          <h1 className="text-lg font-bold text-slate-900">{share.familyName}</h1>
+        </div>
       </header>
 
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-4">
