@@ -10,6 +10,7 @@ import {
   addUTCDays,
   formatDateLong,
   formatDateShort,
+  startOfUTCDay,
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
@@ -80,57 +81,58 @@ export default async function SharedPlanningPage({
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-4">
         {children.length > 0 && <PlanningFilters children_={children} caregivers={caregivers} />}
 
-        <div className="flex rounded-xl bg-slate-100 p-1">
-          {(["day", "week", "month"] as const).map((v) => (
-            <Link
-              key={v}
-              href={`/share/${token}?view=${v}&date=${toDateInputValue(anchor)}${query}`}
-              className={`tap-target flex-1 rounded-lg text-center text-sm font-medium leading-[38px] ${
-                view === v ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
-              }`}
-            >
-              {v === "day" ? "Jour" : v === "week" ? "Semaine" : "Mois"}
-            </Link>
-          ))}
-        </div>
-
         {children.length === 0 ? (
           <p className="rounded-2xl bg-white p-6 text-center text-slate-500 shadow-sm">
             Aucun enfant enregistré pour le moment.
           </p>
-        ) : view === "day" ? (
-          <DayView
-            token={token}
-            anchor={anchor}
+        ) : caregiverId ? (
+          <CaregiverAgenda
             familyId={share.familyId}
             children_={children}
             caregivers={caregivers}
             childId={childId}
             caregiverId={caregiverId}
-            query={query}
-          />
-        ) : view === "week" ? (
-          <WeekView
-            token={token}
-            anchor={anchor}
-            familyId={share.familyId}
-            children_={children}
-            caregivers={caregivers}
-            childId={childId}
-            caregiverId={caregiverId}
-            query={query}
           />
         ) : (
-          <MonthView
-            token={token}
-            anchor={anchor}
-            familyId={share.familyId}
-            children_={children}
-            caregivers={caregivers}
-            childId={childId}
-            caregiverId={caregiverId}
-            query={query}
-          />
+          <>
+            <div className="flex rounded-xl bg-slate-100 p-1">
+              {(["day", "week", "month"] as const).map((v) => (
+                <Link
+                  key={v}
+                  href={`/share/${token}?view=${v}&date=${toDateInputValue(anchor)}${query}`}
+                  className={`tap-target flex-1 rounded-lg text-center text-sm font-medium leading-[38px] ${
+                    view === v ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
+                  }`}
+                >
+                  {v === "day" ? "Jour" : v === "week" ? "Semaine" : "Mois"}
+                </Link>
+              ))}
+            </div>
+
+            {view === "day" ? (
+              <DayView
+                token={token}
+                anchor={anchor}
+                familyId={share.familyId}
+                children_={children}
+                caregivers={caregivers}
+                childId={childId}
+                query={query}
+              />
+            ) : view === "week" ? (
+              <WeekView
+                token={token}
+                anchor={anchor}
+                familyId={share.familyId}
+                children_={children}
+                caregivers={caregivers}
+                childId={childId}
+                query={query}
+              />
+            ) : (
+              <MonthView token={token} anchor={anchor} familyId={share.familyId} caregivers={caregivers} childId={childId} query={query} />
+            )}
+          </>
         )}
       </div>
     </div>
@@ -180,7 +182,6 @@ async function DayView({
   children_,
   caregivers,
   childId,
-  caregiverId,
   query,
 }: {
   token: string;
@@ -189,7 +190,6 @@ async function DayView({
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
-  caregiverId: string | undefined;
   query: string;
 }) {
   const dayStart = new Date(anchor);
@@ -198,7 +198,7 @@ async function DayView({
   const occurrences = filterOccurrences(
     await listEventOccurrencesForFamily(familyId, dayStart, dayEnd),
     childId,
-    caregiverId
+    undefined
   );
   occurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
 
@@ -231,7 +231,6 @@ async function WeekView({
   children_,
   caregivers,
   childId,
-  caregiverId,
   query,
 }: {
   token: string;
@@ -240,7 +239,6 @@ async function WeekView({
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
-  caregiverId: string | undefined;
   query: string;
 }) {
   const weekStart = startOfUTCWeek(anchor);
@@ -249,7 +247,7 @@ async function WeekView({
   const occurrences = filterOccurrences(
     await listEventOccurrencesForFamily(familyId, weekStart, weekEnd),
     childId,
-    caregiverId
+    undefined
   );
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
@@ -263,7 +261,6 @@ async function WeekView({
   }
 
   const todayKey = toDateInputValue(new Date());
-  const visibleDays = caregiverId ? days.filter((d) => (byDay.get(toDateInputValue(d))?.length ?? 0) > 0) : days;
 
   return (
     <div className="flex flex-col gap-4">
@@ -276,48 +273,118 @@ async function WeekView({
         query={query}
       />
 
-      {caregiverId && visibleDays.length === 0 ? (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-          Cette personne ne garde pas d&apos;enfant cette semaine.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {visibleDays.map((d) => {
-            const key = toDateInputValue(d);
-            const dayOccurrences = byDay.get(key) ?? [];
-            const isToday = key === todayKey;
-            return (
-              <div key={key} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 px-1">
-                  <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
-                    {formatDateLong(d)}
-                  </p>
-                  {isToday && (
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
-                      Aujourd&apos;hui
-                    </span>
-                  )}
-                </div>
-                {dayOccurrences.length === 0 ? (
-                  <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {dayOccurrences.map((occ, i) => (
-                      <OccurrenceCard
-                        key={`${occ.id}-${i}`}
-                        occurrence={occ}
-                        familyChildren={children_}
-                        caregivers={caregivers}
-                        editable={false}
-                      />
-                    ))}
-                  </div>
+      <div className="flex flex-col gap-4">
+        {days.map((d) => {
+          const key = toDateInputValue(d);
+          const dayOccurrences = byDay.get(key) ?? [];
+          const isToday = key === todayKey;
+          return (
+            <div key={key} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-1">
+                <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                  {formatDateLong(d)}
+                </p>
+                {isToday && (
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                    Aujourd&apos;hui
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+              {dayOccurrences.length === 0 ? (
+                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {dayOccurrences.map((occ, i) => (
+                    <OccurrenceCard
+                      key={`${occ.id}-${i}`}
+                      occurrence={occ}
+                      familyChildren={children_}
+                      caregivers={caregivers}
+                      editable={false}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+async function CaregiverAgenda({
+  familyId,
+  children_,
+  caregivers,
+  childId,
+  caregiverId,
+}: {
+  familyId: string;
+  children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
+  caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
+  childId: string | undefined;
+  caregiverId: string;
+}) {
+  const todayStart = startOfUTCDay(new Date());
+  const rangeEnd = addUTCDays(todayStart, 90);
+  const occurrences = filterOccurrences(
+    await listEventOccurrencesForFamily(familyId, todayStart, rangeEnd),
+    childId,
+    caregiverId
+  );
+
+  const byDay = new Map<string, EventOccurrenceDTO[]>();
+  for (const occ of occurrences) {
+    const key = occ.occurrenceDate;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(occ);
+  }
+  const sortedDays = Array.from(byDay.keys()).sort();
+  for (const dayOccurrences of byDay.values()) {
+    dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+  }
+  const todayKey = toDateInputValue(todayStart);
+
+  if (sortedDays.length === 0) {
+    return (
+      <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
+        Aucune garde prévue prochainement pour cette personne.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {sortedDays.map((key) => {
+        const d = new Date(`${key}T00:00:00.000Z`);
+        const isToday = key === todayKey;
+        return (
+          <div key={key} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+              <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                {formatDateLong(d)}
+              </p>
+              {isToday && (
+                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                  Aujourd&apos;hui
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              {byDay.get(key)!.map((occ, i) => (
+                <OccurrenceCard
+                  key={`${occ.id}-${i}`}
+                  occurrence={occ}
+                  familyChildren={children_}
+                  caregivers={caregivers}
+                  editable={false}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -326,19 +393,15 @@ async function MonthView({
   token,
   anchor,
   familyId,
-  children_,
   caregivers,
   childId,
-  caregiverId,
   query,
 }: {
   token: string;
   anchor: Date;
   familyId: string;
-  children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
-  caregiverId: string | undefined;
   query: string;
 }) {
   const monthStart = startOfUTCMonth(anchor);
@@ -347,83 +410,13 @@ async function MonthView({
     monthStart
   );
 
-  if (caregiverId) {
-    const occurrences = filterOccurrences(
-      await listEventOccurrencesForFamily(familyId, monthStart, nextMonthStart),
-      childId,
-      caregiverId
-    );
-    const byDay = new Map<string, EventOccurrenceDTO[]>();
-    for (const occ of occurrences) {
-      const key = occ.occurrenceDate;
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key)!.push(occ);
-    }
-    const sortedDays = Array.from(byDay.keys()).sort();
-    for (const dayOccurrences of byDay.values()) {
-      dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
-    }
-    const todayKey = toDateInputValue(new Date());
-
-    return (
-      <div className="flex flex-col gap-4">
-        <NavArrows
-          token={token}
-          view="month"
-          prev={addUTCDays(monthStart, -1)}
-          next={nextMonthStart}
-          label={monthLabel}
-          query={query}
-        />
-
-        {sortedDays.length === 0 ? (
-          <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-            Cette personne ne garde pas d&apos;enfant ce mois-ci.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {sortedDays.map((key) => {
-              const d = new Date(`${key}T00:00:00.000Z`);
-              const isToday = key === todayKey;
-              return (
-                <div key={key} className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 px-1">
-                    <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
-                      {formatDateLong(d)}
-                    </p>
-                    {isToday && (
-                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
-                        Aujourd&apos;hui
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {byDay.get(key)!.map((occ, i) => (
-                      <OccurrenceCard
-                        key={`${occ.id}-${i}`}
-                        occurrence={occ}
-                        familyChildren={children_}
-                        caregivers={caregivers}
-                        editable={false}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
   const occurrences = filterOccurrences(
     await listEventOccurrencesForFamily(familyId, gridStart, gridEnd),
     childId,
-    caregiverId
+    undefined
   );
   const countByDay = new Map<string, number>();
   const colorsByDay = new Map<string, string[]>();
