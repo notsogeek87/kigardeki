@@ -451,48 +451,69 @@ async function MonthView({
         query={query}
       />
 
-      <div className="grid grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-          <div key={i} className="pb-1 text-center text-xs font-semibold text-slate-400">
-            {d}
-          </div>
-        ))}
-        {days.map((d) => {
-          const key = toDateInputValue(d);
-          const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
-          const count = countByDay.get(key) ?? 0;
-          const dayColors = colorsByDay.get(key) ?? [];
-          return (
-            <Link
-              key={key}
-              href={`/share/${token}?view=day&date=${key}${query}`}
-              className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
-                inMonth ? "text-slate-700" : "text-slate-300"
-              }`}
-            >
-              {d.getUTCDate()}
-              {count > 0 && (
-                <span className="mt-0.5 flex items-center gap-0.5">
-                  {dayColors.length > 0 ? (
-                    dayColors
-                      .slice(0, 3)
-                      .map((color, i) => (
-                        <span
-                          key={i}
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: color }}
-                          aria-hidden="true"
-                        />
-                      ))
-                  ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-                  )}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="grid flex-1 grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+            <div key={i} className="pb-1 text-center text-xs font-semibold text-slate-400">
+              {d}
+            </div>
+          ))}
+          {days.map((d) => {
+            const key = toDateInputValue(d);
+            const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
+            const count = countByDay.get(key) ?? 0;
+            const dayColors = colorsByDay.get(key) ?? [];
+            return (
+              <Link
+                key={key}
+                href={`/share/${token}?view=day&date=${key}${query}`}
+                className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
+                  inMonth ? "text-slate-700" : "text-slate-300"
+                }`}
+              >
+                {d.getUTCDate()}
+                {count > 0 && (
+                  <span className="mt-0.5 flex items-center gap-0.5">
+                    {dayColors.length > 0 ? (
+                      dayColors
+                        .slice(0, 3)
+                        .map((color, i) => (
+                          <span
+                            key={i}
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: color }}
+                            aria-hidden="true"
+                          />
+                        ))
+                    ) : (
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
+                    )}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+        <CaregiverLegend caregivers={caregivers} />
       </div>
+    </div>
+  );
+}
+
+function CaregiverLegend({ caregivers }: { caregivers: { id: string; firstName: string; color: string }[] }) {
+  if (caregivers.length === 0) return null;
+  return (
+    <div className="flex shrink-0 flex-row flex-wrap gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:w-40 sm:flex-col">
+      {caregivers.map((caregiver) => (
+        <div key={caregiver.id} className="flex items-center gap-2 text-sm text-slate-600">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: caregiver.color }}
+            aria-hidden="true"
+          />
+          {caregiver.firstName}
+        </div>
+      ))}
     </div>
   );
 }
