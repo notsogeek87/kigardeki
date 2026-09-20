@@ -38,11 +38,12 @@ jobs:
 
       - name: Unit tests
         run: npm test
-        # Set a real TEST_DATABASE_URL secret (a disposable Neon branch) to
-        # also run the permission/family-isolation integration tests —
-        # see tests/permissions.integration.test.ts.
+        # Set a TEST_DATABASE_URL repo secret (a disposable Neon branch) to
+        # also run the permission/family-isolation integration tests — see
+        # tests/permissions.integration.test.ts. Left unset, that suite is
+        # skipped and only the pure-logic tests run.
         env:
-          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL || 'postgresql://user:password@localhost:5432/kigardeki' }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
 
       - name: Build
         run: npm run build

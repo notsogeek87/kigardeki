@@ -5,20 +5,28 @@
  * enforcement actually matters — the whole point is that it happens
  * server-side, not in a mock.
  *
- * They only run when DATABASE_URL points at a real, disposable database
- * (e.g. a dedicated Neon test branch) — never run this against a database
- * with real family data, since it creates and deletes rows. Locally / in
- * CI: `DATABASE_URL=... npm test`.
+ * They only run when TEST_DATABASE_URL points at a real, disposable
+ * database (e.g. a dedicated Neon test branch) — never run this against a
+ * database with real family data, since it creates and deletes rows.
+ * Locally / in CI: `TEST_DATABASE_URL=... npm test`.
+ *
+ * Note this is deliberately its own variable, not DATABASE_URL: CI (and
+ * some local setups) always sets *some* DATABASE_URL so that unrelated
+ * steps like `prisma generate` have a syntactically valid value, even when
+ * no real test database is configured — gating on DATABASE_URL itself
+ * would make these tests "pass" by silently never running.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-// Prisma's datasource requires *some* value for the constructor to succeed;
-// when there's no real database this stays unused because every test below
-// is skipped.
-process.env.DATABASE_URL ??= "postgresql://invalid:invalid@localhost:5432/invalid";
-process.env.ENCRYPTION_KEY ??= "6fh/oNujAEB5RYY9FYn3io/1Ood2/gfdKe1vPBQowkA=";
+const hasDb = Boolean(process.env.TEST_DATABASE_URL);
 
-const hasDb = Boolean(process.env.DATABASE_URL) && !process.env.DATABASE_URL.includes("invalid:invalid");
+// Prisma's datasource requires *some* value for the constructor to succeed;
+// when there's no real test database this stays unused because every test
+// below is skipped.
+process.env.DATABASE_URL = hasDb
+  ? process.env.TEST_DATABASE_URL
+  : "postgresql://invalid:invalid@localhost:5432/invalid";
+process.env.ENCRYPTION_KEY ??= "6fh/oNujAEB5RYY9FYn3io/1Ood2/gfdKe1vPBQowkA=";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 
@@ -64,7 +72,10 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
   });
 
   afterAll(async () => {
-    await prisma.family.deleteMany({ where: { id: { in: [familyAId, familyBId] } } });
+    const ids = [familyAId, familyBId].filter((id): id is string => Boolean(id));
+    if (ids.length > 0) {
+      await prisma.family.deleteMany({ where: { id: { in: ids } } });
+    }
     await prisma.$disconnect();
   });
 
