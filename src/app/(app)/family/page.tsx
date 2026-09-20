@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/permissions";
 import { listFamilyMembers, listPendingInvitations } from "@/lib/data/family";
 import { listCaregivers } from "@/lib/data/caregivers";
+import { getAppUrl } from "@/lib/url";
 import { RELATION_ICON, RELATION_LABEL } from "@/lib/labels";
 import { CopyLinkButton } from "@/components/copy-link-button";
 
@@ -15,7 +16,7 @@ export default async function FamilyPage() {
     isParent ? listPendingInvitations() : Promise.resolve([]),
   ]);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await getAppUrl();
   const memberByUserId = new Map(members.map((m) => [m.id, m]));
 
   return (
