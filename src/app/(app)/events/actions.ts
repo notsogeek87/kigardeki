@@ -50,14 +50,14 @@ function parseInput(formData: FormData): EventInput {
     recurrence = {
       frequency: "WEEKLY",
       daysOfWeek: (parsed.recurrenceDays ?? []).map(Number),
-      endDate: parsed.recurrenceEndDate ? combineDateAndTime(parsed.recurrenceEndDate, "23:59") : null,
+      endDate: parsed.recurrenceEndDate ? combineDateAndTime(parsed.recurrenceEndDate, "00:00") : null,
     };
   } else if (parsed.dateEnd && parsed.dateEnd > parsed.date) {
     // Simple mode: every calendar day across a consecutive-day period.
     recurrence = {
       frequency: "DAILY",
       daysOfWeek: [],
-      endDate: combineDateAndTime(parsed.dateEnd, "23:59"),
+      endDate: combineDateAndTime(parsed.dateEnd, "00:00"),
     };
   }
 
