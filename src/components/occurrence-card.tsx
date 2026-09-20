@@ -26,9 +26,13 @@ export function OccurrenceCard({
 }) {
   const childNames = namesFor(occurrence.childIds, familyChildren);
   const caregiverNames = namesFor(occurrence.caregiverIds, caregivers);
+  const accentColor = familyChildren.find((c) => occurrence.childIds.includes(c.id))?.color;
 
   const content = (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div
+      className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      style={accentColor ? { borderLeftWidth: 4, borderLeftColor: accentColor } : undefined}
+    >
       <span className="text-2xl leading-none">{EVENT_TYPE_ICON[occurrence.type]}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
