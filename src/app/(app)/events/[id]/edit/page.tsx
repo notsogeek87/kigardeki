@@ -4,6 +4,7 @@ import { getEvent } from "@/lib/data/events";
 import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { EventForm } from "@/components/event-form";
+import { SubmitButton } from "@/components/submit-button";
 import { updateEventAction, deleteEventAction } from "../../actions";
 
 export default async function EditEventPage({
@@ -36,12 +37,9 @@ export default async function EditEventPage({
       />
 
       <form action={remove}>
-        <button
-          type="submit"
-          className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50"
-        >
+        <SubmitButton className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50">
           Supprimer cet événement
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

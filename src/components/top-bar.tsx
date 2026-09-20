@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { logoutAction } from "@/app/(app)/logout-action";
+import { SubmitButton } from "@/components/submit-button";
 
 export function TopBar({ familyName, role }: { familyName: string; role: "PARENT" | "VIEWER" }) {
   return (
@@ -12,9 +13,9 @@ export function TopBar({ familyName, role }: { familyName: string; role: "PARENT
         </div>
       </div>
       <form action={logoutAction}>
-        <button type="submit" className="tap-target rounded-lg px-3 py-2 text-sm font-medium text-slate-500">
+        <SubmitButton className="tap-target rounded-lg px-3 py-2 text-sm font-medium text-slate-500">
           Déconnexion
-        </button>
+        </SubmitButton>
       </form>
     </header>
   );

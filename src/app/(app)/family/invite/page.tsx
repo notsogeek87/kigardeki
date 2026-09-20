@@ -1,4 +1,5 @@
 import { requireParentPage } from "@/lib/permissions";
+import { SubmitButton } from "@/components/submit-button";
 import { RELATION_LABEL } from "@/lib/labels";
 import type { CaregiverRelation } from "@prisma/client";
 import { inviteAction } from "../actions";
@@ -61,12 +62,9 @@ export default async function InvitePage({
           </select>
         </label>
 
-        <button
-          type="submit"
-          className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-        >
+        <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
           Envoyer l&apos;invitation
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );
