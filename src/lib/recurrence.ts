@@ -7,6 +7,8 @@ export type RecurringEventInput = {
   recurrenceFrequency: RecurrenceFrequency | null;
   recurrenceDaysOfWeek: number[];
   recurrenceEndDate: Date | null;
+  /** Calendar dates on which this otherwise-recurring event is skipped. */
+  excludedDates?: Date[];
 };
 
 export type Occurrence = {
@@ -35,8 +37,8 @@ function toISODate(date: Date): string {
  * intersect [rangeStart, rangeEnd). Recurrence is intentionally simple:
  * either WEEKLY on a fixed set of week days, or DAILY (every calendar
  * day, no weekday filter — a plain consecutive-day period), from
- * startAt's date until an optional end date — no exceptions, no
- * monthly/yearly rules.
+ * startAt's date until an optional end date, minus any single dates
+ * listed in excludedDates — no monthly/yearly rules.
  */
 export function expandEventOccurrences(
   event: RecurringEventInput,
@@ -65,12 +67,15 @@ export function expandEventOccurrences(
     ? new Date(Math.min(rangeEnd.getTime(), event.recurrenceEndDate.getTime() + 24 * 60 * 60 * 1000))
     : rangeEnd;
 
+  const excludedDates = new Set((event.excludedDates ?? []).map(toISODate));
+
   const occurrences: Occurrence[] = [];
   const hours = event.startAt.getUTCHours();
   const minutes = event.startAt.getUTCMinutes();
 
   for (let d = new Date(searchStart); d < hardEnd; d.setUTCDate(d.getUTCDate() + 1)) {
     if (!daysOfWeek.includes(d.getUTCDay())) continue;
+    if (excludedDates.has(toISODate(d))) continue;
 
     const occStart = new Date(d);
     occStart.setUTCHours(hours, minutes, 0, 0);
