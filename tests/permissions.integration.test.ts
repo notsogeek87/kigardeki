@@ -172,4 +172,60 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
     expect(event.recurrenceFrequency).toBe("WEEKLY");
     expect(event.recurrenceDaysOfWeek).toEqual([3]);
   });
+
+  it("a new weekly-recurring event removes the overlapping weekday from a superseded one", async () => {
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    const child = await createChild({ firstName: "Superseded", color: "#0891b2" });
+
+    const daycare = await createEvent({
+      type: "DAYCARE",
+      startAt: new Date("2026-09-21T08:00:00Z"),
+      endAt: new Date("2026-09-21T18:00:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [1, 2, 3, 4, 5], endDate: null },
+    });
+    expect(daycare.recurrenceDaysOfWeek).toEqual([1, 2, 3, 4, 5]);
+
+    // A standing Wednesday-afternoon caregiving arrangement overlaps the
+    // tail of the daycare event — Wednesday should be dropped from it.
+    await createEvent({
+      type: "CAREGIVING",
+      startAt: new Date("2026-09-23T16:30:00Z"),
+      endAt: new Date("2026-09-23T19:30:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [3], endDate: null },
+    });
+
+    const refreshed = await prisma.event.findUniqueOrThrow({ where: { id: daycare.id } });
+    expect(refreshed.recurrenceDaysOfWeek.sort()).toEqual([1, 2, 4, 5]);
+  });
+
+  it("a one-off (non-recurring) event never supersedes a standing recurring schedule", async () => {
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    const child = await createChild({ firstName: "NotSuperseded", color: "#dc2626" });
+
+    const daycare = await createEvent({
+      type: "DAYCARE",
+      startAt: new Date("2026-09-21T08:00:00Z"),
+      endAt: new Date("2026-09-21T18:00:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [1, 2, 3, 4, 5], endDate: null },
+    });
+
+    // A single exceptional Wednesday outing must not silently cancel the
+    // standing daycare schedule for every future Wednesday.
+    await createEvent({
+      type: "PARENT",
+      startAt: new Date("2026-09-23T16:30:00Z"),
+      endAt: new Date("2026-09-23T18:30:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+    });
+
+    const refreshed = await prisma.event.findUniqueOrThrow({ where: { id: daycare.id } });
+    expect(refreshed.recurrenceDaysOfWeek.sort()).toEqual([1, 2, 3, 4, 5]);
+  });
 });

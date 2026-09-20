@@ -68,6 +68,78 @@ export async function listEventOccurrencesForFamily(
   return fetchOccurrences(familyId, rangeStart, rangeEnd);
 }
 
+function timeOfDayMinutes(d: Date): number {
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+function timeRangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
+ * When a parent sets up a new weekly-recurring event ("Charlie est chez
+ * Mamie tous les mercredis 16h30-19h30"), any *other* weekly-recurring
+ * event for the same child(ren) that overlaps that time range on the same
+ * weekday(s) is understood to be superseded for those days — e.g. a
+ * standing "crèche lundi-vendredi" no longer applies on Wednesday once a
+ * standing Wednesday afternoon caregiving arrangement is created.
+ *
+ * Deliberately narrow to avoid surprising, silent data loss:
+ * - Only triggers when the *new* event is itself weekly-recurring. A
+ *   one-off event (a single exceptional day) never mutates a standing
+ *   recurring schedule — only another standing schedule can replace one.
+ * - Only trims a candidate event whose children are a subset of the new
+ *   event's children, so an event covering siblings not part of this
+ *   change is left untouched.
+ * - Removes only the overlapping weekday(s) from the candidate's
+ *   recurrenceDaysOfWeek (deleting it if none remain) — it never touches
+ *   days/times that don't conflict.
+ */
+async function trimSupersededRecurringEvents(params: {
+  familyId: string;
+  excludeEventId?: string;
+  childIds: string[];
+  days: number[];
+  startAt: Date;
+  endAt: Date;
+}): Promise<void> {
+  const newStartMin = timeOfDayMinutes(params.startAt);
+  const newEndMin = timeOfDayMinutes(params.endAt);
+
+  const candidates = await prisma.event.findMany({
+    where: {
+      familyId: params.familyId,
+      id: params.excludeEventId ? { not: params.excludeEventId } : undefined,
+      recurrenceFrequency: "WEEKLY",
+      children: { some: { childId: { in: params.childIds } } },
+    },
+    include: { children: { select: { childId: true } } },
+  });
+
+  for (const candidate of candidates) {
+    const candidateChildIds = candidate.children.map((c) => c.childId);
+    const isSubsetOfNewEvent = candidateChildIds.every((id) => params.childIds.includes(id));
+    if (!isSubsetOfNewEvent) continue;
+
+    const overlaps = timeRangesOverlap(
+      newStartMin,
+      newEndMin,
+      timeOfDayMinutes(candidate.startAt),
+      timeOfDayMinutes(candidate.endAt)
+    );
+    if (!overlaps) continue;
+
+    const remainingDays = candidate.recurrenceDaysOfWeek.filter((d) => !params.days.includes(d));
+    if (remainingDays.length === candidate.recurrenceDaysOfWeek.length) continue;
+
+    if (remainingDays.length === 0) {
+      await prisma.event.delete({ where: { id: candidate.id } });
+    } else {
+      await prisma.event.update({ where: { id: candidate.id }, data: { recurrenceDaysOfWeek: remainingDays } });
+    }
+  }
+}
+
 export async function getEvent(eventId: string): Promise<EventDTO | null> {
   const user = await requireSession();
   const row = await prisma.event.findUnique({ where: { id: eventId }, include: EVENT_INCLUDE });
@@ -106,6 +178,17 @@ export async function createEvent(input: EventInput): Promise<EventDTO> {
     include: EVENT_INCLUDE,
   });
 
+  if (input.recurrence?.frequency === "WEEKLY" && input.recurrence.daysOfWeek.length > 0) {
+    await trimSupersededRecurringEvents({
+      familyId: user.familyId,
+      excludeEventId: row.id,
+      childIds: input.childIds,
+      days: input.recurrence.daysOfWeek,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
+  }
+
   return toEventDTO(row);
 }
 
@@ -139,6 +222,17 @@ export async function updateEvent(eventId: string, input: EventInput): Promise<E
     },
     include: EVENT_INCLUDE,
   });
+
+  if (input.recurrence?.frequency === "WEEKLY" && input.recurrence.daysOfWeek.length > 0) {
+    await trimSupersededRecurringEvents({
+      familyId: user.familyId,
+      excludeEventId: row.id,
+      childIds: input.childIds,
+      days: input.recurrence.daysOfWeek,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
+  }
 
   return toEventDTO(row);
 }
