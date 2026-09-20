@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { registerAction } from "./actions";
 
@@ -11,7 +12,7 @@ export default async function RegisterPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6 py-12">
       <div className="text-center">
-        <p className="text-4xl">👨‍👩‍👧‍👦</p>
+        <Image src="/logo.png" alt="Kigardeki" width={80} height={80} className="mx-auto" />
         <h1 className="mt-2 text-2xl font-bold text-slate-900">Créer ma famille</h1>
         <p className="mt-1 text-slate-500">Vous serez le premier parent de la famille.</p>
       </div>
