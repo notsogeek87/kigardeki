@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+
+jobs:
+  quality:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    env:
+      # A syntactically valid but unreachable URL: enough for `prisma
+      # generate` and for the build (no route queries a database at build
+      # time — every authenticated page opts into dynamic rendering).
+      DATABASE_URL: "postgresql://user:password@localhost:5432/kigardeki"
+      NEXTAUTH_SECRET: "ci-secret-not-used-for-anything-real"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      ENCRYPTION_KEY: "6fh/oNujAEB5RYY9FYn3io/1Ood2/gfdKe1vPBQowkA="
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+        # Set a real TEST_DATABASE_URL secret (a disposable Neon branch) to
+        # also run the permission/family-isolation integration tests —
+        # see tests/permissions.integration.test.ts.
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL || 'postgresql://user:password@localhost:5432/kigardeki' }}
+
+      - name: Build
+        run: npm run build

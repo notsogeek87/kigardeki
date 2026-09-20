@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PARENT
+  VIEWER
+}
+
+enum CaregiverRelation {
+  MOTHER
+  FATHER
+  GRANDMOTHER
+  GRANDFATHER
+  AUNT
+  UNCLE
+  NANNY
+  OTHER
+}
+
+enum EventType {
+  SCHOOL
+  DAYCARE
+  CAREGIVING
+  PARENT
+  OTHER
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Family {
+  id        String   @id @default(cuid())
+  /// Encrypted at the application layer (see src/lib/crypto.ts).
+  name      String
+  createdAt DateTime @default(now())
+
+  users       User[]
+  children    Child[]
+  caregivers  Caregiver[]
+  events      Event[]
+  invitations Invitation[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  /// One-way hash (bcrypt) — never encrypted/reversible, never plaintext.
+  passwordHash String
+  /// Encrypted at the application layer (see src/lib/crypto.ts).
+  name         String
+  role         Role
+  familyId     String
+  createdAt    DateTime @default(now())
+
+  family           Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  caregiverProfile Caregiver?
+  createdEvents    Event[]    @relation("EventCreatedBy")
+  invitationsSent  Invitation[]
+
+  @@index([familyId])
+}
+
+model Child {
+  id       String @id @default(cuid())
+  familyId String
+  // The following personal fields are encrypted at the application layer
+  // (see src/lib/crypto.ts) before being written to Postgres. birthDate is
+  // stored as an encrypted ISO date string rather than a native DateTime
+  // because it is never used in SQL filtering/sorting.
+  firstName       String
+  lastName        String?
+  birthDate       String?
+  avatarUrl       String?
+  color           String
+  defaultLocation String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  family     Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  eventLinks EventChild[]
+
+  @@index([familyId])
+}
+
+model Caregiver {
+  id       String  @id @default(cuid())
+  familyId String
+  userId   String? @unique
+  // firstName, lastName and phone are encrypted at the application layer
+  // (see src/lib/crypto.ts).
+  firstName String
+  lastName  String?
+  relation  CaregiverRelation
+  phone     String?
+  avatarUrl String?
+  color     String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  family     Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  eventLinks EventCaregiver[]
+
+  @@index([familyId])
+}
+
+model Event {
+  id       String    @id @default(cuid())
+  familyId String
+  type     EventType
+
+  // First (or only, for non-recurring events) occurrence.
+  // Kept in plaintext: the calendar has to filter/sort on these in SQL.
+  startAt DateTime
+  endAt   DateTime
+
+  // location and notes are encrypted at the application layer
+  // (see src/lib/crypto.ts) — they are never filtered/sorted on in SQL.
+  location String?
+  notes    String?
+
+  // Simple weekly recurrence. When recurrenceFrequency is null the event
+  // occurs exactly once, at [startAt, endAt].
+  recurrenceFrequency  RecurrenceFrequency?
+  recurrenceDaysOfWeek Int[]                @default([])
+  recurrenceEndDate    DateTime?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  family     Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator    User             @relation("EventCreatedBy", fields: [createdBy], references: [id])
+  children   EventChild[]
+  caregivers EventCaregiver[]
+
+  @@index([familyId, startAt])
+}
+
+model EventChild {
+  eventId String
+  childId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, childId])
+  @@index([childId])
+}
+
+model EventCaregiver {
+  eventId     String
+  caregiverId String
+
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  caregiver Caregiver @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, caregiverId])
+  @@index([caregiverId])
+}
+
+model Invitation {
+  id         String    @id @default(cuid())
+  familyId   String
+  email      String
+  token      String    @unique
+  role       Role      @default(VIEWER)
+  relation   CaregiverRelation?
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  inviter User   @relation(fields: [invitedBy], references: [id])
+
+  @@index([familyId])
+  @@index([email])
+}
