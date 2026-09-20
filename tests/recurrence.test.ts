@@ -118,6 +118,23 @@ describe("expandEventOccurrences", () => {
     ]);
   });
 
+  it("a DAILY range from day 12 to day 13 produces exactly two days (regression)", () => {
+    // Reported bug: adding a range from the 12th to the 13th produced an
+    // occurrence on the 14th too. recurrenceEndDate must be the start of
+    // its day (not end-of-day) since expandEventOccurrences adds a full
+    // 24h to it to get an exclusive upper bound.
+    const event = {
+      id: "e1",
+      startAt: utc(2026, 11, 12, 8, 0),
+      endAt: utc(2026, 11, 12, 18, 0),
+      recurrenceFrequency: "DAILY" as const,
+      recurrenceDaysOfWeek: [],
+      recurrenceEndDate: utc(2026, 11, 13),
+    };
+    const occurrences = expandEventOccurrences(event, utc(2026, 11, 1), utc(2026, 11, 30));
+    expect(occurrences.map((o) => o.occurrenceDate)).toEqual(["2026-11-12", "2026-11-13"]);
+  });
+
   it("allows two independent events to overlap without interfering", () => {
     const schoolRun = {
       id: "school",
