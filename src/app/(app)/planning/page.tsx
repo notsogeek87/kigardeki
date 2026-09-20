@@ -47,7 +47,6 @@ export default async function PlanningPage({
   const caregiverId = params.caregiver || undefined;
 
   const [children, caregivers] = await Promise.all([listChildren(), listCaregivers()]);
-  const isViewer = user.role !== "PARENT";
 
   const query = `${params.child ? `&child=${params.child}` : ""}${
     params.caregiver ? `&caregiver=${params.caregiver}` : ""
@@ -67,7 +66,9 @@ export default async function PlanningPage({
         )}
       </div>
 
-      {isViewer && <PlanningFilters children_={children} caregivers={caregivers} />}
+      {(children.length > 0 || caregivers.length > 0) && (
+        <PlanningFilters children_={children} caregivers={caregivers} />
+      )}
 
       {caregiverId ? (
         <CaregiverAgenda
