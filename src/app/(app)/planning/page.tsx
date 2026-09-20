@@ -66,9 +66,9 @@ export default async function PlanningPage({
         )}
       </div>
 
-      <ViewSwitcher view={view} date={anchor} query={query} />
-
       {isViewer && <PlanningFilters children_={children} caregivers={caregivers} />}
+
+      <ViewSwitcher view={view} date={anchor} query={query} />
 
       {view === "week" && (
         <WeekView
@@ -93,7 +93,14 @@ export default async function PlanningPage({
         />
       )}
       {view === "month" && (
-        <MonthView anchor={anchor} childId={childId} caregiverId={caregiverId} caregivers={caregivers} />
+        <MonthView
+          anchor={anchor}
+          childId={childId}
+          caregiverId={caregiverId}
+          caregivers={caregivers}
+          children_={children}
+          editable={user.role === "PARENT"}
+        />
       )}
     </div>
   );
@@ -309,14 +316,92 @@ async function MonthView({
   childId,
   caregiverId,
   caregivers,
+  children_,
+  editable,
 }: {
   anchor: Date;
   childId: string | undefined;
   caregiverId: string | undefined;
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
+  children_: Awaited<ReturnType<typeof listChildren>>;
+  editable: boolean;
 }) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
+  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    monthStart
+  );
+  const query = `${childId ? `&child=${childId}` : ""}${caregiverId ? `&caregiver=${caregiverId}` : ""}`;
+
+  if (caregiverId) {
+    const occurrences = filterOccurrences(
+      await listEventOccurrences(monthStart, nextMonthStart),
+      childId,
+      caregiverId
+    );
+    const byDay = new Map<string, EventOccurrenceDTO[]>();
+    for (const occ of occurrences) {
+      const key = occ.occurrenceDate;
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key)!.push(occ);
+    }
+    const sortedDays = Array.from(byDay.keys()).sort();
+    for (const dayOccurrences of byDay.values()) {
+      dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+    }
+    const todayKey = toDateInputValue(new Date());
+
+    return (
+      <div className="flex flex-col gap-4">
+        <NavArrows
+          view="month"
+          prev={addUTCDays(monthStart, -1)}
+          next={nextMonthStart}
+          label={monthLabel}
+          query={query}
+        />
+
+        {sortedDays.length === 0 ? (
+          <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
+            Cette personne ne garde pas d&apos;enfant ce mois-ci.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {sortedDays.map((key) => {
+              const d = new Date(`${key}T00:00:00.000Z`);
+              const isToday = key === todayKey;
+              return (
+                <div key={key} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 px-1">
+                    <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                      {formatDateLong(d)}
+                    </p>
+                    {isToday && (
+                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                        Aujourd&apos;hui
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {byDay.get(key)!.map((occ, i) => (
+                      <OccurrenceCard
+                        key={`${occ.id}-${i}`}
+                        occurrence={occ}
+                        familyChildren={children_}
+                        caregivers={caregivers}
+                        editable={editable}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
@@ -335,12 +420,6 @@ async function MonthView({
 
   const days: Date[] = [];
   for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
-
-  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    monthStart
-  );
-
-  const query = `${childId ? `&child=${childId}` : ""}${caregiverId ? `&caregiver=${caregiverId}` : ""}`;
 
   return (
     <div className="flex flex-col gap-3">
