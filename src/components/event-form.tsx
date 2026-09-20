@@ -1,7 +1,8 @@
 import type { CaregiverDTO, ChildDTO, EventDTO } from "@/lib/data/dto";
 import { EVENT_TYPE_ICON, EVENT_TYPE_LABEL } from "@/lib/labels";
-import { RecurrenceFields } from "@/components/recurrence-fields";
+import { EventScheduleFields } from "@/components/event-schedule-fields";
 import { toDateInputValue, toTimeInputValue } from "@/lib/wall-time";
+import { timeToSlots } from "@/lib/time-slots";
 import type { EventType } from "@prisma/client";
 
 const EVENT_TYPES: EventType[] = ["SCHOOL", "DAYCARE", "CAREGIVING", "PARENT", "OTHER"];
@@ -23,6 +24,10 @@ export function EventForm({
   submitLabel: string;
   defaultDate?: string;
 }) {
+  const defaultSlots = event
+    ? timeToSlots(toTimeInputValue(event.startAt), toTimeInputValue(event.endAt))
+    : (["MORNING", "AFTERNOON"] as const);
+
   return (
     <form action={action} className="flex flex-col gap-4">
       {error && <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
@@ -87,39 +92,22 @@ export function EventForm({
         </div>
       </fieldset>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-slate-700">Date</span>
-        <input
-          type="date"
-          name="date"
-          required
-          defaultValue={event ? toDateInputValue(event.startAt) : defaultDate}
-          className="tap-target rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-        />
-      </label>
-
-      <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-sm font-medium text-slate-700">Début</span>
-          <input
-            type="time"
-            name="startTime"
-            required
-            defaultValue={event ? toTimeInputValue(event.startAt) : "16:30"}
-            className="tap-target rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          />
-        </label>
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-sm font-medium text-slate-700">Fin</span>
-          <input
-            type="time"
-            name="endTime"
-            required
-            defaultValue={event ? toTimeInputValue(event.endAt) : "19:30"}
-            className="tap-target rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-          />
-        </label>
-      </div>
+      <EventScheduleFields
+        defaultDateStart={event ? toDateInputValue(event.startAt) : defaultDate}
+        defaultDateEnd={
+          event?.recurrenceFrequency === "DAILY" && event.recurrenceEndDate
+            ? toDateInputValue(event.recurrenceEndDate)
+            : undefined
+        }
+        defaultSlots={[...defaultSlots]}
+        defaultRecurring={event?.recurrenceFrequency === "WEEKLY"}
+        defaultRecurrenceDays={event?.recurrenceFrequency === "WEEKLY" ? event.recurrenceDaysOfWeek : []}
+        defaultRecurrenceEndDate={
+          event?.recurrenceFrequency === "WEEKLY" && event.recurrenceEndDate
+            ? toDateInputValue(event.recurrenceEndDate)
+            : ""
+        }
+      />
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-slate-700">Lieu (optionnel)</span>
@@ -139,12 +127,6 @@ export function EventForm({
           className="rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
         />
       </label>
-
-      <RecurrenceFields
-        defaultRecurring={Boolean(event?.recurrenceFrequency)}
-        defaultDays={event?.recurrenceDaysOfWeek ?? []}
-        defaultEndDate={event?.recurrenceEndDate ? toDateInputValue(event.recurrenceEndDate) : ""}
-      />
 
       <button
         type="submit"

@@ -117,9 +117,24 @@ est représenté comme un `Caregiver` lié à son `User`, exactement comme une
 nounou ou un grand-parent — un seul mécanisme d'assignation pour tout le
 monde).
 
-Les événements récurrents sont volontairement simples : fréquence
-hebdomadaire, jours sélectionnés, date de début/fin optionnelle — pas de
-règles calendaires complexes (voir `src/lib/recurrence.ts`).
+Les horaires se choisissent par demi-journée (**Matin** / **Après-midi**,
+les deux cochées par défaut) plutôt qu'en heures précises — voir
+`src/lib/time-slots.ts`. Deux modes de récurrence, volontairement simples
+(voir `src/lib/recurrence.ts`) :
+
+- **Simple** : date de début + date de fin optionnelle → tous les jours
+  calendaires de la période (`DAILY`), pour une garde ponctuelle sur
+  plusieurs jours (ex. vacances).
+- **Avancé** : « se répète chaque semaine » sur des jours précis, sans date
+  de fin par défaut (`WEEKLY`) — pour un planning permanent (« tous les
+  mercredis »).
+
+Un nouvel événement **hebdomadaire** qui chevauche un autre événement
+hebdomadaire du même enfant supplante automatiquement ce dernier sur le(s)
+jour(s) et créneau(x) en conflit (en conservant la portion non couverte
+comme événement séparé si besoin) — voir `trimSupersededRecurringEvents`
+dans `src/lib/data/events.ts`. Un événement ponctuel ne modifie jamais un
+planning permanent existant.
 
 ## PWA
 

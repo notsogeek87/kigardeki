@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { WEEKDAY_CHECKBOX_LABELS } from "@/lib/labels";
 import { toDateInputValue } from "@/lib/wall-time";
+import { TimeSlotCheckboxes } from "@/components/time-slot-checkboxes";
 import type { CaregiverDTO } from "@/lib/data/dto";
 
 const DEFAULT_DAYS = [1, 2, 3, 4, 5];
@@ -10,13 +11,6 @@ const INPUT_CLASS =
   "tap-target rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200";
 
 type ScheduleType = "NONE" | "SCHOOL" | "DAYCARE" | "CAREGIVING";
-
-const DEFAULT_TIMES: Record<ScheduleType, { start: string; end: string }> = {
-  NONE: { start: "08:30", end: "16:30" },
-  SCHOOL: { start: "08:30", end: "16:30" },
-  DAYCARE: { start: "08:00", end: "17:30" },
-  CAREGIVING: { start: "16:30", end: "19:30" },
-};
 
 /**
  * Optional "default schedule" shown only when creating a child: picking
@@ -27,7 +21,6 @@ const DEFAULT_TIMES: Record<ScheduleType, { start: string; end: string }> = {
  */
 export function ChildDefaultScheduleFields({ caregivers }: { caregivers: CaregiverDTO[] }) {
   const [type, setType] = useState<ScheduleType>("NONE");
-  const [times, setTimes] = useState(DEFAULT_TIMES.NONE);
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4">
@@ -38,11 +31,7 @@ export function ChildDefaultScheduleFields({ caregivers }: { caregivers: Caregiv
         <select
           name="scheduleType"
           value={type}
-          onChange={(e) => {
-            const next = e.target.value as ScheduleType;
-            setType(next);
-            setTimes(DEFAULT_TIMES[next]);
-          }}
+          onChange={(e) => setType(e.target.value as ScheduleType)}
           className={INPUT_CLASS}
         >
           <option value="NONE">Non défini — j&apos;ajouterai les événements moi-même</option>
@@ -92,28 +81,7 @@ export function ChildDefaultScheduleFields({ caregivers }: { caregivers: Caregiv
             ))}
           </div>
 
-          <div className="flex gap-3">
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-sm text-slate-600">Début</span>
-              <input
-                type="time"
-                name="scheduleStartTime"
-                value={times.start}
-                onChange={(e) => setTimes((t) => ({ ...t, start: e.target.value }))}
-                className={INPUT_CLASS}
-              />
-            </label>
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-sm text-slate-600">Fin</span>
-              <input
-                type="time"
-                name="scheduleEndTime"
-                value={times.end}
-                onChange={(e) => setTimes((t) => ({ ...t, end: e.target.value }))}
-                className={INPUT_CLASS}
-              />
-            </label>
-          </div>
+          <TimeSlotCheckboxes name="scheduleSlots" defaultSlots={["MORNING", "AFTERNOON"]} />
 
           <div className="flex gap-3">
             <label className="flex flex-1 flex-col gap-1">

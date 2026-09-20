@@ -5,11 +5,11 @@ import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { EVENT_TYPE_ICON } from "@/lib/labels";
+import { formatSlotOrTimeShort } from "@/lib/time-slots";
 import {
   addUTCDays,
   formatDateLong,
   formatDateShort,
-  formatTime,
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
@@ -179,7 +179,8 @@ async function WeekView({
                             className="rounded-lg px-1.5 py-1 text-[11px] leading-tight text-white"
                             style={{ backgroundColor: child.color }}
                           >
-                            <span>{EVENT_TYPE_ICON[occ.type]}</span> {formatTime(occ.occurrenceStartAt)}
+                            <span>{EVENT_TYPE_ICON[occ.type]}</span>{" "}
+                            {formatSlotOrTimeShort(occ.occurrenceStartAt, occ.occurrenceEndAt)}
                           </Link>
                         ))}
                       </div>

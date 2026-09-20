@@ -4,11 +4,11 @@ import { listChildrenForFamily } from "@/lib/data/children";
 import { listCaregiversForFamily } from "@/lib/data/caregivers";
 import { listEventOccurrencesForFamily } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
+import { formatSlotOrTimeShort } from "@/lib/time-slots";
 import {
   addUTCDays,
   formatDateLong,
   formatDateShort,
-  formatTime,
   startOfUTCWeek,
   toDateInputValue,
 } from "@/lib/wall-time";
@@ -217,7 +217,7 @@ async function WeekView({
                             className="rounded-lg px-1.5 py-1 text-[11px] leading-tight text-white"
                             style={{ backgroundColor: child.color }}
                           >
-                            {formatTime(occ.occurrenceStartAt)}
+                            {formatSlotOrTimeShort(occ.occurrenceStartAt, occ.occurrenceEndAt)}
                           </span>
                         ))}
                       </div>

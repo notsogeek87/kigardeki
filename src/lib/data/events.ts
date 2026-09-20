@@ -94,6 +94,10 @@ function timeRangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: n
  * - Removes only the overlapping weekday(s) from the candidate's
  *   recurrenceDaysOfWeek (deleting it if none remain) — it never touches
  *   days/times that don't conflict.
+ * - When the new event only covers part of the candidate's daily time
+ *   range (e.g. new = afternoon only, candidate = all day), the surviving
+ *   portion (the morning) is preserved as its own event for just the
+ *   affected weekday(s), rather than disappearing along with the day.
  */
 async function trimSupersededRecurringEvents(params: {
   familyId: string;
@@ -113,7 +117,10 @@ async function trimSupersededRecurringEvents(params: {
       recurrenceFrequency: "WEEKLY",
       children: { some: { childId: { in: params.childIds } } },
     },
-    include: { children: { select: { childId: true } } },
+    include: {
+      children: { select: { childId: true } },
+      caregivers: { select: { caregiverId: true } },
+    },
   });
 
   for (const candidate of candidates) {
@@ -121,21 +128,49 @@ async function trimSupersededRecurringEvents(params: {
     const isSubsetOfNewEvent = candidateChildIds.every((id) => params.childIds.includes(id));
     if (!isSubsetOfNewEvent) continue;
 
-    const overlaps = timeRangesOverlap(
-      newStartMin,
-      newEndMin,
-      timeOfDayMinutes(candidate.startAt),
-      timeOfDayMinutes(candidate.endAt)
-    );
-    if (!overlaps) continue;
+    const candStartMin = timeOfDayMinutes(candidate.startAt);
+    const candEndMin = timeOfDayMinutes(candidate.endAt);
+    if (!timeRangesOverlap(newStartMin, newEndMin, candStartMin, candEndMin)) continue;
 
-    const remainingDays = candidate.recurrenceDaysOfWeek.filter((d) => !params.days.includes(d));
-    if (remainingDays.length === candidate.recurrenceDaysOfWeek.length) continue;
+    const overlappingDays = candidate.recurrenceDaysOfWeek.filter((d) => params.days.includes(d));
+    if (overlappingDays.length === 0) continue;
+    const remainingDays = candidate.recurrenceDaysOfWeek.filter((d) => !overlappingDays.includes(d));
 
     if (remainingDays.length === 0) {
       await prisma.event.delete({ where: { id: candidate.id } });
     } else {
       await prisma.event.update({ where: { id: candidate.id }, data: { recurrenceDaysOfWeek: remainingDays } });
+    }
+
+    // The portion of the candidate's daily range the new event does NOT
+    // cover — what survives of the old schedule on the affected days.
+    const remainderPieces: Array<[number, number]> = [];
+    if (newStartMin > candStartMin) remainderPieces.push([candStartMin, Math.min(newStartMin, candEndMin)]);
+    if (newEndMin < candEndMin) remainderPieces.push([Math.max(newEndMin, candStartMin), candEndMin]);
+
+    for (const [pieceStart, pieceEnd] of remainderPieces) {
+      if (pieceEnd <= pieceStart) continue;
+      const remainderStart = new Date(candidate.startAt);
+      remainderStart.setUTCHours(Math.floor(pieceStart / 60), pieceStart % 60, 0, 0);
+      const remainderEnd = new Date(candidate.startAt);
+      remainderEnd.setUTCHours(Math.floor(pieceEnd / 60), pieceEnd % 60, 0, 0);
+
+      await prisma.event.create({
+        data: {
+          familyId: params.familyId,
+          type: candidate.type,
+          startAt: remainderStart,
+          endAt: remainderEnd,
+          location: candidate.location,
+          notes: candidate.notes,
+          recurrenceFrequency: "WEEKLY",
+          recurrenceDaysOfWeek: overlappingDays,
+          recurrenceEndDate: candidate.recurrenceEndDate,
+          createdBy: candidate.createdBy,
+          children: { create: candidateChildIds.map((childId) => ({ childId })) },
+          caregivers: { create: candidate.caregivers.map((c) => ({ caregiverId: c.caregiverId })) },
+        },
+      });
     }
   }
 }

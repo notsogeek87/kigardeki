@@ -99,6 +99,25 @@ describe("expandEventOccurrences", () => {
     expect(occurrences).toHaveLength(5);
   });
 
+  it("expands a DAILY range across every calendar day, including weekends", () => {
+    const event = {
+      id: "e1",
+      startAt: utc(2026, 9, 23, 8, 0), // Wednesday
+      endAt: utc(2026, 9, 23, 18, 0),
+      recurrenceFrequency: "DAILY" as const,
+      recurrenceDaysOfWeek: [],
+      recurrenceEndDate: utc(2026, 9, 27), // Sunday
+    };
+    const occurrences = expandEventOccurrences(event, utc(2026, 9, 21), utc(2026, 10, 5));
+    expect(occurrences.map((o) => o.occurrenceDate)).toEqual([
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25",
+      "2026-09-26",
+      "2026-09-27",
+    ]);
+  });
+
   it("allows two independent events to overlap without interfering", () => {
     const schoolRun = {
       id: "school",

@@ -6,14 +6,16 @@ import { z } from "zod";
 import type { EventType } from "@prisma/client";
 import { createEvent, deleteEvent, updateEvent, type EventInput } from "@/lib/data/events";
 import { combineDateAndTime } from "@/lib/wall-time";
+import { slotsToTimeRange, type TimeSlot } from "@/lib/time-slots";
 
 const EVENT_TYPES = ["SCHOOL", "DAYCARE", "CAREGIVING", "PARENT", "OTHER"] as const;
+const SLOTS = ["MORNING", "AFTERNOON"] as const;
 
 const schema = z.object({
   type: z.enum(EVENT_TYPES),
-  date: z.string().min(1, "La date est requise."),
-  startTime: z.string().min(1, "L'heure de début est requise."),
-  endTime: z.string().min(1, "L'heure de fin est requise."),
+  date: z.string().min(1, "La date de début est requise."),
+  dateEnd: z.string().optional(),
+  slots: z.array(z.enum(SLOTS)).min(1, "Sélectionnez au moins Matin ou Après-midi."),
   location: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   childIds: z.array(z.string()).min(1, "Sélectionnez au moins un enfant."),
@@ -27,8 +29,8 @@ function parseInput(formData: FormData): EventInput {
   const parsed = schema.parse({
     type: formData.get("type"),
     date: formData.get("date"),
-    startTime: formData.get("startTime"),
-    endTime: formData.get("endTime"),
+    dateEnd: formData.get("dateEnd") || undefined,
+    slots: formData.getAll("slots").map(String),
     location: formData.get("location") || undefined,
     notes: formData.get("notes") || undefined,
     childIds: formData.getAll("childIds").map(String),
@@ -38,17 +40,26 @@ function parseInput(formData: FormData): EventInput {
     recurrenceEndDate: formData.get("recurrenceEndDate") || undefined,
   });
 
-  const startAt = combineDateAndTime(parsed.date, parsed.startTime);
-  const endAt = combineDateAndTime(parsed.date, parsed.endTime);
+  const { startTime, endTime } = slotsToTimeRange(parsed.slots as TimeSlot[]);
+  const startAt = combineDateAndTime(parsed.date, startTime);
+  const endAt = combineDateAndTime(parsed.date, endTime);
 
-  const recurrence =
-    parsed.recurring === "on"
-      ? {
-          frequency: "WEEKLY" as const,
-          daysOfWeek: (parsed.recurrenceDays ?? []).map(Number),
-          endDate: parsed.recurrenceEndDate ? combineDateAndTime(parsed.recurrenceEndDate, "23:59") : null,
-        }
-      : null;
+  let recurrence: EventInput["recurrence"] = null;
+  if (parsed.recurring === "on") {
+    // Advanced mode: a standing pattern on specific weekdays, optionally forever.
+    recurrence = {
+      frequency: "WEEKLY",
+      daysOfWeek: (parsed.recurrenceDays ?? []).map(Number),
+      endDate: parsed.recurrenceEndDate ? combineDateAndTime(parsed.recurrenceEndDate, "23:59") : null,
+    };
+  } else if (parsed.dateEnd && parsed.dateEnd > parsed.date) {
+    // Simple mode: every calendar day across a consecutive-day period.
+    recurrence = {
+      frequency: "DAILY",
+      daysOfWeek: [],
+      endDate: combineDateAndTime(parsed.dateEnd, "23:59"),
+    };
+  }
 
   return {
     type: parsed.type as EventType,

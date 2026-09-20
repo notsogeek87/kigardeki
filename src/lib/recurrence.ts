@@ -33,8 +33,10 @@ function toISODate(date: Date): string {
 /**
  * Expands a (possibly recurring) event into its concrete occurrences that
  * intersect [rangeStart, rangeEnd). Recurrence is intentionally simple:
- * weekly, on a fixed set of week days, from startAt's date until an
- * optional end date — no exceptions, no monthly/yearly rules.
+ * either WEEKLY on a fixed set of week days, or DAILY (every calendar
+ * day, no weekday filter — a plain consecutive-day period), from
+ * startAt's date until an optional end date — no exceptions, no
+ * monthly/yearly rules.
  */
 export function expandEventOccurrences(
   event: RecurringEventInput,
@@ -51,7 +53,11 @@ export function expandEventOccurrences(
   }
 
   const daysOfWeek =
-    event.recurrenceDaysOfWeek.length > 0 ? event.recurrenceDaysOfWeek : [event.startAt.getUTCDay()];
+    event.recurrenceFrequency === "DAILY"
+      ? [0, 1, 2, 3, 4, 5, 6]
+      : event.recurrenceDaysOfWeek.length > 0
+        ? event.recurrenceDaysOfWeek
+        : [event.startAt.getUTCDay()];
 
   const eventStartDay = startOfDay(event.startAt);
   const searchStart = eventStartDay > startOfDay(rangeStart) ? eventStartDay : startOfDay(rangeStart);

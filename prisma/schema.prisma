@@ -37,6 +37,11 @@ enum EventType {
 
 enum RecurrenceFrequency {
   WEEKLY
+  /// Every calendar day in [startAt date, recurrenceEndDate] — a simple
+  /// consecutive-day period (e.g. a week of holiday care), regardless of
+  /// weekday. Distinct from WEEKLY, which repeats indefinitely on specific
+  /// weekdays.
+  DAILY
 }
 
 // ---------------------------------------------------------------------------

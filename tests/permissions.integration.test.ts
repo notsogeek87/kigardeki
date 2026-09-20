@@ -202,6 +202,50 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
     expect(refreshed.recurrenceDaysOfWeek.sort()).toEqual([1, 2, 4, 5]);
   });
 
+  it("splits off a remainder event for the surviving half-day of a partially-overlapped schedule", async () => {
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    const child = await createChild({ firstName: "SplitRemainder", color: "#16a34a" });
+
+    // Daycare 08:00-18:00 every weekday.
+    const daycare = await createEvent({
+      type: "DAYCARE",
+      startAt: new Date("2026-09-21T08:00:00Z"),
+      endAt: new Date("2026-09-21T18:00:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [1, 2, 3, 4, 5], endDate: null },
+    });
+
+    // Grandparent takes over Wednesday afternoon only (16:30-19:30) — the
+    // 08:00-16:30 morning portion of the daycare schedule should survive
+    // as its own Wednesday-only event, not disappear along with the day.
+    await createEvent({
+      type: "CAREGIVING",
+      startAt: new Date("2026-09-23T16:30:00Z"),
+      endAt: new Date("2026-09-23T19:30:00Z"),
+      childIds: [child.id],
+      caregiverIds: [],
+      recurrence: { frequency: "WEEKLY", daysOfWeek: [3], endDate: null },
+    });
+
+    const refreshedDaycare = await prisma.event.findUniqueOrThrow({ where: { id: daycare.id } });
+    expect(refreshedDaycare.recurrenceDaysOfWeek.sort()).toEqual([1, 2, 4, 5]);
+
+    const remainder = await prisma.event.findFirst({
+      where: {
+        type: "DAYCARE",
+        id: { not: daycare.id },
+        recurrenceDaysOfWeek: { equals: [3] },
+        children: { some: { childId: child.id } },
+      },
+    });
+    expect(remainder).not.toBeNull();
+    expect(remainder!.startAt.getUTCHours()).toBe(8);
+    expect(remainder!.startAt.getUTCMinutes()).toBe(0);
+    expect(remainder!.endAt.getUTCHours()).toBe(16);
+    expect(remainder!.endAt.getUTCMinutes()).toBe(30);
+  });
+
   it("a one-off (non-recurring) event never supersedes a standing recurring schedule", async () => {
     mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
     const child = await createChild({ firstName: "NotSuperseded", color: "#dc2626" });

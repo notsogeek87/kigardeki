@@ -7,6 +7,7 @@ import type { EventType } from "@prisma/client";
 import { createChild, deleteChild, updateChild } from "@/lib/data/children";
 import { createEvent } from "@/lib/data/events";
 import { combineDateAndTime } from "@/lib/wall-time";
+import { slotsToTimeRange, type TimeSlot } from "@/lib/time-slots";
 import { ForbiddenError, UnauthorizedError } from "@/lib/permissions";
 
 const schema = z.object({
@@ -37,12 +38,13 @@ function parseInput(formData: FormData) {
   };
 }
 
+const SLOTS = ["MORNING", "AFTERNOON"] as const;
+
 const scheduleSchema = z.object({
   scheduleType: z.enum(["NONE", "SCHOOL", "DAYCARE", "CAREGIVING"]).default("NONE"),
   scheduleCaregiverId: z.string().optional(),
   scheduleDays: z.array(z.string()).optional(),
-  scheduleStartTime: z.string().optional(),
-  scheduleEndTime: z.string().optional(),
+  scheduleSlots: z.array(z.enum(SLOTS)).optional(),
   scheduleStartDate: z.string().optional(),
   scheduleEndDate: z.string().optional(),
 });
@@ -57,8 +59,7 @@ async function createDefaultScheduleIfRequested(
     scheduleType: formData.get("scheduleType") || "NONE",
     scheduleCaregiverId: formData.get("scheduleCaregiverId") || undefined,
     scheduleDays: formData.getAll("scheduleDays").map(String),
-    scheduleStartTime: formData.get("scheduleStartTime") || undefined,
-    scheduleEndTime: formData.get("scheduleEndTime") || undefined,
+    scheduleSlots: formData.getAll("scheduleSlots").map(String),
     scheduleStartDate: formData.get("scheduleStartDate") || undefined,
     scheduleEndDate: formData.get("scheduleEndDate") || undefined,
   });
@@ -68,10 +69,10 @@ async function createDefaultScheduleIfRequested(
 
   const days = (parsed.scheduleDays ?? []).map(Number).filter((n) => !Number.isNaN(n));
   const startDate = parsed.scheduleStartDate;
-  if (days.length === 0 || !startDate) return;
+  const slots = parsed.scheduleSlots ?? [];
+  if (days.length === 0 || !startDate || slots.length === 0) return;
 
-  const startTime = parsed.scheduleStartTime || "08:30";
-  const endTime = parsed.scheduleEndTime || "16:30";
+  const { startTime, endTime } = slotsToTimeRange(slots as TimeSlot[]);
 
   await createEvent({
     type: parsed.scheduleType as EventType,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { EventOccurrenceDTO } from "@/lib/data/events";
 import type { CaregiverDTO, ChildDTO } from "@/lib/data/dto";
 import { EVENT_TYPE_ICON, EVENT_TYPE_LABEL } from "@/lib/labels";
-import { formatTime } from "@/lib/wall-time";
+import { formatSlotOrTime } from "@/lib/time-slots";
 
 function namesFor(ids: string[], all: { id: string; firstName: string; color?: string }[]): string {
   return ids
@@ -36,7 +36,7 @@ export function OccurrenceCard({
             {showChildren ? childNames : EVENT_TYPE_LABEL[occurrence.type]}
           </p>
           <p className="shrink-0 text-sm font-medium text-slate-600">
-            {formatTime(occurrence.occurrenceStartAt)} → {formatTime(occurrence.occurrenceEndAt)}
+            {formatSlotOrTime(occurrence.occurrenceStartAt, occurrence.occurrenceEndAt)}
           </p>
         </div>
         <p className="mt-0.5 text-sm text-slate-500">
