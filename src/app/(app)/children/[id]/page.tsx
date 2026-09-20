@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireParentPage } from "@/lib/permissions";
 import { getChild } from "@/lib/data/children";
 import { ChildForm } from "@/components/child-form";
+import { SubmitButton } from "@/components/submit-button";
 import { updateChildAction, deleteChildAction } from "../actions";
 
 export default async function EditChildPage({
@@ -26,12 +27,9 @@ export default async function EditChildPage({
       <ChildForm action={update} child={child} error={error} submitLabel="Enregistrer" />
 
       <form action={remove}>
-        <button
-          type="submit"
-          className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50"
-        >
+        <SubmitButton className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50">
           Supprimer cet enfant
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

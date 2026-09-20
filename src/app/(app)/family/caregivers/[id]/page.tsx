@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireParentPage } from "@/lib/permissions";
 import { getCaregiver } from "@/lib/data/caregivers";
 import { CaregiverForm } from "@/components/caregiver-form";
+import { SubmitButton } from "@/components/submit-button";
 import { updateCaregiverAction, deleteCaregiverAction } from "../../actions";
 
 export default async function EditCaregiverPage({
@@ -27,12 +28,9 @@ export default async function EditCaregiverPage({
 
       {!caregiver.userId && (
         <form action={remove}>
-          <button
-            type="submit"
-            className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50"
-          >
+          <SubmitButton className="tap-target w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 active:bg-red-50">
             Supprimer cette personne
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

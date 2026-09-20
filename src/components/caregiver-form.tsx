@@ -1,4 +1,5 @@
 import { ColorPickerField } from "@/components/color-picker";
+import { SubmitButton } from "@/components/submit-button";
 import { RELATION_LABEL } from "@/lib/labels";
 import type { CaregiverDTO } from "@/lib/data/dto";
 import type { CaregiverRelation } from "@prisma/client";
@@ -65,12 +66,9 @@ export function CaregiverForm({
 
       <ColorPickerField defaultValue={caregiver?.color} />
 
-      <button
-        type="submit"
-        className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-      >
+      <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
         {submitLabel}
-      </button>
+      </SubmitButton>
     </form>
   );
 }
