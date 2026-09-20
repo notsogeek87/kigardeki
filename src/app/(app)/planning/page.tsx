@@ -4,12 +4,10 @@ import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
-import { EVENT_TYPE_ICON } from "@/lib/labels";
 import {
   addUTCDays,
   formatDateLong,
   formatDateShort,
-  formatTime,
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
@@ -51,7 +49,9 @@ export default async function PlanningPage({
 
       <ViewSwitcher view={view} date={anchor} />
 
-      {view === "week" && <WeekView anchor={anchor} children_={children} editable={user.role === "PARENT"} />}
+      {view === "week" && (
+        <WeekView anchor={anchor} children_={children} caregivers={caregivers} editable={user.role === "PARENT"} />
+      )}
       {view === "day" && <DayView anchor={anchor} children_={children} caregivers={caregivers} editable={user.role === "PARENT"} />}
       {view === "month" && <MonthView anchor={anchor} />}
     </div>
@@ -107,10 +107,12 @@ function NavArrows({ view, prev, next, label }: { view: View; prev: Date; next: 
 async function WeekView({
   anchor,
   children_,
+  caregivers,
   editable,
 }: {
   anchor: Date;
   children_: Awaited<ReturnType<typeof listChildren>>;
+  caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   editable: boolean;
 }) {
   const weekStart = startOfUTCWeek(anchor);
@@ -118,20 +120,20 @@ async function WeekView({
   const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
   const occurrences = await listEventOccurrences(weekStart, weekEnd);
 
-  const byChildAndDay = new Map<string, Map<string, EventOccurrenceDTO[]>>();
-  for (const child of children_) byChildAndDay.set(child.id, new Map());
+  const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
-    for (const childId of occ.childIds) {
-      const dayMap = byChildAndDay.get(childId);
-      if (!dayMap) continue;
-      const key = occ.occurrenceDate;
-      if (!dayMap.has(key)) dayMap.set(key, []);
-      dayMap.get(key)!.push(occ);
-    }
+    const key = occ.occurrenceDate;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(occ);
+  }
+  for (const dayOccurrences of byDay.values()) {
+    dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
   }
 
+  const todayKey = toDateInputValue(new Date());
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <NavArrows
         view="week"
         prev={addUTCDays(weekStart, -7)}
@@ -141,55 +143,41 @@ async function WeekView({
 
       {children_.length === 0 && <EmptyChildren />}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-10 min-w-[88px] bg-white p-2 text-left text-xs font-semibold text-slate-400">
-                &nbsp;
-              </th>
-              {days.map((d) => (
-                <th key={toDateInputValue(d)} className="min-w-[100px] p-2 text-center text-xs font-semibold text-slate-500">
-                  {formatDateShort(d)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {children_.map((child) => (
-              <tr key={child.id} className="border-t border-slate-100">
-                <td className="sticky left-0 z-10 bg-white p-2 align-top">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: child.color }} />
-                    {child.firstName}
+      <div className="flex flex-col gap-4">
+        {days.map((d) => {
+          const key = toDateInputValue(d);
+          const dayOccurrences = byDay.get(key) ?? [];
+          const isToday = key === todayKey;
+          return (
+            <div key={key} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-1">
+                <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                  {formatDateLong(d)}
+                </p>
+                {isToday && (
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                    Aujourd&apos;hui
                   </span>
-                </td>
-                {days.map((d) => {
-                  const key = toDateInputValue(d);
-                  const dayOccurrences = (byChildAndDay.get(child.id)?.get(key) ?? []).sort(
-                    (a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime()
-                  );
-                  return (
-                    <td key={key} className="p-1.5 align-top">
-                      <div className="flex flex-col gap-1">
-                        {dayOccurrences.map((occ, i) => (
-                          <Link
-                            key={`${occ.id}-${i}`}
-                            href={editable ? `/events/${occ.id}/edit` : "#"}
-                            className="rounded-lg px-1.5 py-1 text-[11px] leading-tight text-white"
-                            style={{ backgroundColor: child.color }}
-                          >
-                            <span>{EVENT_TYPE_ICON[occ.type]}</span> {formatTime(occ.occurrenceStartAt)}
-                          </Link>
-                        ))}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                )}
+              </div>
+              {dayOccurrences.length === 0 ? (
+                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {dayOccurrences.map((occ, i) => (
+                    <OccurrenceCard
+                      key={`${occ.id}-${i}`}
+                      occurrence={occ}
+                      familyChildren={children_}
+                      caregivers={caregivers}
+                      editable={editable}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
