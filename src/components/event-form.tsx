@@ -1,3 +1,4 @@
+import { SubmitButton } from "@/components/submit-button";
 import type { CaregiverDTO, ChildDTO, EventDTO } from "@/lib/data/dto";
 import { EVENT_TYPE_ICON, EVENT_TYPE_LABEL } from "@/lib/labels";
 import { EventScheduleFields } from "@/components/event-schedule-fields";
@@ -128,12 +129,9 @@ export function EventForm({
         />
       </label>
 
-      <button
-        type="submit"
-        className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-      >
+      <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
         {submitLabel}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

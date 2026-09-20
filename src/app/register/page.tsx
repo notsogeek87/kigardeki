@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SubmitButton } from "@/components/submit-button";
 import { registerAction } from "./actions";
 
 export default async function RegisterPage({
@@ -79,12 +80,9 @@ export default async function RegisterPage({
           />
         </label>
 
-        <button
-          type="submit"
-          className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-        >
+        <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
           Créer ma famille
-        </button>
+        </SubmitButton>
       </form>
 
       <p className="text-center text-sm text-slate-500">

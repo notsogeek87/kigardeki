@@ -4,6 +4,7 @@ import { listShareLinks } from "@/lib/data/shareLinks";
 import { getAppUrl } from "@/lib/url";
 import { InstallPwaHint } from "@/components/install-pwa-hint";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { SubmitButton } from "@/components/submit-button";
 import { changePasswordAction, renameFamilyAction, createShareLinkAction, revokeShareLinkAction } from "./actions";
 
 export default async function SettingsPage({
@@ -41,9 +42,9 @@ export default async function SettingsPage({
               required
               className="tap-target flex-1 rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
             />
-            <button type="submit" className="tap-target rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white">
+            <SubmitButton className="tap-target rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white">
               OK
-            </button>
+            </SubmitButton>
           </form>
         </section>
       )}
@@ -68,21 +69,16 @@ export default async function SettingsPage({
                   <CopyLinkButton link={url} />
                 </div>
                 <form action={revoke}>
-                  <button type="submit" className="text-xs font-medium text-red-600">
-                    Révoquer ce lien
-                  </button>
+                  <SubmitButton className="text-xs font-medium text-red-600">Révoquer ce lien</SubmitButton>
                 </form>
               </div>
             );
           })}
 
           <form action={createShareLinkAction}>
-            <button
-              type="submit"
-              className="tap-target w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 active:bg-slate-50"
-            >
+            <SubmitButton className="tap-target w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 active:bg-slate-50">
               + Créer un lien de partage
-            </button>
+            </SubmitButton>
           </form>
         </section>
       )}
@@ -107,12 +103,9 @@ export default async function SettingsPage({
             autoComplete="new-password"
             className="tap-target rounded-xl border border-slate-300 px-4 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
           />
-          <button
-            type="submit"
-            className="tap-target rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white active:bg-slate-800"
-          >
+          <SubmitButton className="tap-target rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white active:bg-slate-800">
             Changer le mot de passe
-          </button>
+          </SubmitButton>
         </form>
       </section>
 

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SubmitButton } from "@/components/submit-button";
 import { loginAction } from "./actions";
 
 export default async function LoginPage({
@@ -49,12 +50,9 @@ export default async function LoginPage({
           />
         </label>
 
-        <button
-          type="submit"
-          className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-        >
+        <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
           Se connecter
-        </button>
+        </SubmitButton>
       </form>
 
       <p className="text-center text-sm text-slate-500">

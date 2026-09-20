@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { getInvitationPreview } from "@/lib/data/invitations";
+import { SubmitButton } from "@/components/submit-button";
 import { acceptInvitationAction } from "./actions";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -66,12 +67,9 @@ export default async function InvitePage({
           />
         </label>
 
-        <button
-          type="submit"
-          className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700"
-        >
+        <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
           Rejoindre la famille
-        </button>
+        </SubmitButton>
       </form>
     </main>
   );
