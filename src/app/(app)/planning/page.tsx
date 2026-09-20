@@ -4,6 +4,7 @@ import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
+import { PlanningFilters } from "@/components/planning-filters";
 import {
   addUTCDays,
   formatDateLong,
@@ -21,17 +22,35 @@ function parseDate(value: string | undefined): Date {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
+function filterOccurrences(
+  occurrences: EventOccurrenceDTO[],
+  childId: string | undefined,
+  caregiverId: string | undefined
+): EventOccurrenceDTO[] {
+  return occurrences.filter(
+    (occ) =>
+      (!childId || occ.childIds.includes(childId)) && (!caregiverId || occ.caregiverIds.includes(caregiverId))
+  );
+}
+
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; date?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string }>;
 }) {
   const params = await searchParams;
   const user = await requireSession();
   const view: View = params.view === "day" || params.view === "month" ? params.view : "week";
   const anchor = parseDate(params.date);
+  const childId = params.child || undefined;
+  const caregiverId = params.caregiver || undefined;
 
   const [children, caregivers] = await Promise.all([listChildren(), listCaregivers()]);
+  const isViewer = user.role !== "PARENT";
+
+  const query = `${params.child ? `&child=${params.child}` : ""}${
+    params.caregiver ? `&caregiver=${params.caregiver}` : ""
+  }`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -47,18 +66,38 @@ export default async function PlanningPage({
         )}
       </div>
 
-      <ViewSwitcher view={view} date={anchor} />
+      <ViewSwitcher view={view} date={anchor} query={query} />
+
+      {isViewer && <PlanningFilters children_={children} caregivers={caregivers} />}
 
       {view === "week" && (
-        <WeekView anchor={anchor} children_={children} caregivers={caregivers} editable={user.role === "PARENT"} />
+        <WeekView
+          anchor={anchor}
+          children_={children}
+          caregivers={caregivers}
+          editable={user.role === "PARENT"}
+          childId={childId}
+          caregiverId={caregiverId}
+          query={query}
+        />
       )}
-      {view === "day" && <DayView anchor={anchor} children_={children} caregivers={caregivers} editable={user.role === "PARENT"} />}
-      {view === "month" && <MonthView anchor={anchor} />}
+      {view === "day" && (
+        <DayView
+          anchor={anchor}
+          children_={children}
+          caregivers={caregivers}
+          editable={user.role === "PARENT"}
+          childId={childId}
+          caregiverId={caregiverId}
+          query={query}
+        />
+      )}
+      {view === "month" && <MonthView anchor={anchor} childId={childId} caregiverId={caregiverId} />}
     </div>
   );
 }
 
-function ViewSwitcher({ view, date }: { view: View; date: Date }) {
+function ViewSwitcher({ view, date, query }: { view: View; date: Date; query: string }) {
   const dateStr = toDateInputValue(date);
   const tabs: { key: View; label: string }[] = [
     { key: "day", label: "Jour" },
@@ -70,7 +109,7 @@ function ViewSwitcher({ view, date }: { view: View; date: Date }) {
       {tabs.map((tab) => (
         <Link
           key={tab.key}
-          href={`/planning?view=${tab.key}&date=${dateStr}`}
+          href={`/planning?view=${tab.key}&date=${dateStr}${query}`}
           className={`tap-target flex-1 rounded-lg text-center text-sm font-medium leading-[38px] ${
             view === tab.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
           }`}
@@ -82,11 +121,23 @@ function ViewSwitcher({ view, date }: { view: View; date: Date }) {
   );
 }
 
-function NavArrows({ view, prev, next, label }: { view: View; prev: Date; next: Date; label: string }) {
+function NavArrows({
+  view,
+  prev,
+  next,
+  label,
+  query,
+}: {
+  view: View;
+  prev: Date;
+  next: Date;
+  label: string;
+  query: string;
+}) {
   return (
     <div className="flex items-center justify-between">
       <Link
-        href={`/planning?view=${view}&date=${toDateInputValue(prev)}`}
+        href={`/planning?view=${view}&date=${toDateInputValue(prev)}${query}`}
         className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
         aria-label="Précédent"
       >
@@ -94,7 +145,7 @@ function NavArrows({ view, prev, next, label }: { view: View; prev: Date; next: 
       </Link>
       <p className="font-medium capitalize text-slate-700">{label}</p>
       <Link
-        href={`/planning?view=${view}&date=${toDateInputValue(next)}`}
+        href={`/planning?view=${view}&date=${toDateInputValue(next)}${query}`}
         className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
         aria-label="Suivant"
       >
@@ -109,16 +160,22 @@ async function WeekView({
   children_,
   caregivers,
   editable,
+  childId,
+  caregiverId,
+  query,
 }: {
   anchor: Date;
   children_: Awaited<ReturnType<typeof listChildren>>;
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   editable: boolean;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+  query: string;
 }) {
   const weekStart = startOfUTCWeek(anchor);
   const weekEnd = addUTCDays(weekStart, 7);
   const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
-  const occurrences = await listEventOccurrences(weekStart, weekEnd);
+  const occurrences = filterOccurrences(await listEventOccurrences(weekStart, weekEnd), childId, caregiverId);
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -139,6 +196,7 @@ async function WeekView({
         prev={addUTCDays(weekStart, -7)}
         next={addUTCDays(weekStart, 7)}
         label={`${formatDateShort(weekStart)} — ${formatDateShort(addUTCDays(weekStart, 6))}`}
+        query={query}
       />
 
       {children_.length === 0 && <EmptyChildren />}
@@ -188,16 +246,22 @@ async function DayView({
   children_,
   caregivers,
   editable,
+  childId,
+  caregiverId,
+  query,
 }: {
   anchor: Date;
   children_: Awaited<ReturnType<typeof listChildren>>;
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   editable: boolean;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+  query: string;
 }) {
   const dayStart = new Date(anchor);
   dayStart.setUTCHours(0, 0, 0, 0);
   const dayEnd = addUTCDays(dayStart, 1);
-  const occurrences = await listEventOccurrences(dayStart, dayEnd);
+  const occurrences = filterOccurrences(await listEventOccurrences(dayStart, dayEnd), childId, caregiverId);
   occurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
 
   return (
@@ -207,6 +271,7 @@ async function DayView({
         prev={addUTCDays(dayStart, -1)}
         next={addUTCDays(dayStart, 1)}
         label={formatDateLong(dayStart)}
+        query={query}
       />
 
       {children_.length === 0 && <EmptyChildren />}
@@ -230,13 +295,21 @@ async function DayView({
   );
 }
 
-async function MonthView({ anchor }: { anchor: Date }) {
+async function MonthView({
+  anchor,
+  childId,
+  caregiverId,
+}: {
+  anchor: Date;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+}) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
-  const occurrences = await listEventOccurrences(gridStart, gridEnd);
+  const occurrences = filterOccurrences(await listEventOccurrences(gridStart, gridEnd), childId, caregiverId);
   const countByDay = new Map<string, number>();
   for (const occ of occurrences) {
     countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
@@ -249,6 +322,8 @@ async function MonthView({ anchor }: { anchor: Date }) {
     monthStart
   );
 
+  const query = `${childId ? `&child=${childId}` : ""}${caregiverId ? `&caregiver=${caregiverId}` : ""}`;
+
   return (
     <div className="flex flex-col gap-3">
       <NavArrows
@@ -256,6 +331,7 @@ async function MonthView({ anchor }: { anchor: Date }) {
         prev={addUTCDays(monthStart, -1)}
         next={nextMonthStart}
         label={monthLabel}
+        query={query}
       />
 
       <div className="grid grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -271,7 +347,7 @@ async function MonthView({ anchor }: { anchor: Date }) {
           return (
             <Link
               key={key}
-              href={`/planning?view=day&date=${key}`}
+              href={`/planning?view=day&date=${key}${query}`}
               className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
                 inMonth ? "text-slate-700" : "text-slate-300"
               }`}

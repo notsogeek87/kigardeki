@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { getInvitationPreview } from "@/lib/data/invitations";
 import { acceptInvitationAction } from "./actions";
 
@@ -20,7 +21,7 @@ export default async function InvitePage({
   if (!invitation || !invitation.valid) {
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-4xl">⏳</p>
+        <Image src="/logo.png" alt="Kigardeki" width={64} height={64} />
         <h1 className="text-xl font-semibold">Invitation invalide ou expirée</h1>
         <p className="text-slate-500">Demandez à un parent de vous envoyer une nouvelle invitation.</p>
       </main>
@@ -32,7 +33,7 @@ export default async function InvitePage({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6 py-12">
       <div className="text-center">
-        <p className="text-4xl">💌</p>
+        <Image src="/logo.png" alt="Kigardeki" width={80} height={80} className="mx-auto" />
         <h1 className="mt-2 text-2xl font-bold text-slate-900">Rejoindre {invitation.familyName}</h1>
         <p className="mt-1 text-slate-500">
           Rôle : <span className="font-medium">{ROLE_LABEL[invitation.role]}</span>
