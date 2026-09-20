@@ -25,7 +25,9 @@ export function OccurrenceCard({
   showChildren?: boolean;
 }) {
   const childNames = namesFor(occurrence.childIds, familyChildren);
-  const caregiverNames = namesFor(occurrence.caregiverIds, caregivers);
+  const occurrenceCaregivers = occurrence.caregiverIds
+    .map((id) => caregivers.find((c) => c.id === id))
+    .filter((c): c is CaregiverDTO => Boolean(c));
   const accentColor = familyChildren.find((c) => occurrence.childIds.includes(c.id))?.color;
 
   const content = (
@@ -43,9 +45,23 @@ export function OccurrenceCard({
             {formatSlotOrTime(occurrence.occurrenceStartAt, occurrence.occurrenceEndAt)}
           </p>
         </div>
-        <p className="mt-0.5 text-sm text-slate-500">
-          {EVENT_TYPE_LABEL[occurrence.type]}
-          {caregiverNames && <> · {caregiverNames}</>}
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-slate-500">
+          <span>{EVENT_TYPE_LABEL[occurrence.type]}</span>
+          {occurrenceCaregivers.length > 0 && (
+            <>
+              <span>·</span>
+              {occurrenceCaregivers.map((caregiver) => (
+                <span key={caregiver.id} className="inline-flex items-center gap-1">
+                  <span
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: caregiver.color }}
+                    aria-hidden="true"
+                  />
+                  {caregiver.firstName}
+                </span>
+              ))}
+            </>
+          )}
         </p>
         {occurrence.location && <p className="mt-0.5 text-sm text-slate-400">📍 {occurrence.location}</p>}
       </div>
