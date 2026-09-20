@@ -5,6 +5,7 @@ import { listChildrenForFamily } from "@/lib/data/children";
 import { listCaregiversForFamily } from "@/lib/data/caregivers";
 import { listEventOccurrencesForFamily, type EventOccurrenceDTO } from "@/lib/data/events";
 import { OccurrenceCard } from "@/components/occurrence-card";
+import { PlanningFilters } from "@/components/planning-filters";
 import {
   addUTCDays,
   formatDateLong,
@@ -22,12 +23,23 @@ function parseDate(value: string | undefined): Date {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
+function filterOccurrences(
+  occurrences: EventOccurrenceDTO[],
+  childId: string | undefined,
+  caregiverId: string | undefined
+): EventOccurrenceDTO[] {
+  return occurrences.filter(
+    (occ) =>
+      (!childId || occ.childIds.includes(childId)) && (!caregiverId || occ.caregiverIds.includes(caregiverId))
+  );
+}
+
 export default async function SharedPlanningPage({
   params,
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ view?: string; date?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string }>;
 }) {
   const { token } = await params;
   const share = await resolveShareToken(token);
@@ -45,11 +57,15 @@ export default async function SharedPlanningPage({
   const sp = await searchParams;
   const view: View = sp.view === "day" || sp.view === "month" ? sp.view : "week";
   const anchor = parseDate(sp.date);
+  const childId = sp.child || undefined;
+  const caregiverId = sp.caregiver || undefined;
 
   const [children, caregivers] = await Promise.all([
     listChildrenForFamily(share.familyId),
     listCaregiversForFamily(share.familyId),
   ]);
+
+  const query = `${sp.child ? `&child=${sp.child}` : ""}${sp.caregiver ? `&caregiver=${sp.caregiver}` : ""}`;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
@@ -66,7 +82,7 @@ export default async function SharedPlanningPage({
           {(["day", "week", "month"] as const).map((v) => (
             <Link
               key={v}
-              href={`/share/${token}?view=${v}&date=${toDateInputValue(anchor)}`}
+              href={`/share/${token}?view=${v}&date=${toDateInputValue(anchor)}${query}`}
               className={`tap-target flex-1 rounded-lg text-center text-sm font-medium leading-[38px] ${
                 view === v ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
               }`}
@@ -76,27 +92,68 @@ export default async function SharedPlanningPage({
           ))}
         </div>
 
+        {children.length > 0 && <PlanningFilters children_={children} caregivers={caregivers} />}
+
         {children.length === 0 ? (
           <p className="rounded-2xl bg-white p-6 text-center text-slate-500 shadow-sm">
             Aucun enfant enregistré pour le moment.
           </p>
         ) : view === "day" ? (
-          <DayView token={token} anchor={anchor} familyId={share.familyId} children_={children} caregivers={caregivers} />
+          <DayView
+            token={token}
+            anchor={anchor}
+            familyId={share.familyId}
+            children_={children}
+            caregivers={caregivers}
+            childId={childId}
+            caregiverId={caregiverId}
+            query={query}
+          />
         ) : view === "week" ? (
-          <WeekView token={token} anchor={anchor} familyId={share.familyId} children_={children} caregivers={caregivers} />
+          <WeekView
+            token={token}
+            anchor={anchor}
+            familyId={share.familyId}
+            children_={children}
+            caregivers={caregivers}
+            childId={childId}
+            caregiverId={caregiverId}
+            query={query}
+          />
         ) : (
-          <MonthView token={token} anchor={anchor} familyId={share.familyId} />
+          <MonthView
+            token={token}
+            anchor={anchor}
+            familyId={share.familyId}
+            childId={childId}
+            caregiverId={caregiverId}
+            query={query}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function NavArrows({ token, view, prev, next, label }: { token: string; view: View; prev: Date; next: Date; label: string }) {
+function NavArrows({
+  token,
+  view,
+  prev,
+  next,
+  label,
+  query,
+}: {
+  token: string;
+  view: View;
+  prev: Date;
+  next: Date;
+  label: string;
+  query: string;
+}) {
   return (
     <div className="flex items-center justify-between">
       <Link
-        href={`/share/${token}?view=${view}&date=${toDateInputValue(prev)}`}
+        href={`/share/${token}?view=${view}&date=${toDateInputValue(prev)}${query}`}
         className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
         aria-label="Précédent"
       >
@@ -104,7 +161,7 @@ function NavArrows({ token, view, prev, next, label }: { token: string; view: Vi
       </Link>
       <p className="font-medium capitalize text-slate-700">{label}</p>
       <Link
-        href={`/share/${token}?view=${view}&date=${toDateInputValue(next)}`}
+        href={`/share/${token}?view=${view}&date=${toDateInputValue(next)}${query}`}
         className="tap-target rounded-full px-3 py-2 text-lg text-slate-500"
         aria-label="Suivant"
       >
@@ -120,17 +177,27 @@ async function DayView({
   familyId,
   children_,
   caregivers,
+  childId,
+  caregiverId,
+  query,
 }: {
   token: string;
   anchor: Date;
   familyId: string;
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+  query: string;
 }) {
   const dayStart = new Date(anchor);
   dayStart.setUTCHours(0, 0, 0, 0);
   const dayEnd = addUTCDays(dayStart, 1);
-  const occurrences = await listEventOccurrencesForFamily(familyId, dayStart, dayEnd);
+  const occurrences = filterOccurrences(
+    await listEventOccurrencesForFamily(familyId, dayStart, dayEnd),
+    childId,
+    caregiverId
+  );
   occurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
 
   return (
@@ -141,6 +208,7 @@ async function DayView({
         prev={addUTCDays(dayStart, -1)}
         next={addUTCDays(dayStart, 1)}
         label={formatDateLong(dayStart)}
+        query={query}
       />
 
       {occurrences.length === 0 ? (
@@ -160,17 +228,27 @@ async function WeekView({
   familyId,
   children_,
   caregivers,
+  childId,
+  caregiverId,
+  query,
 }: {
   token: string;
   anchor: Date;
   familyId: string;
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+  query: string;
 }) {
   const weekStart = startOfUTCWeek(anchor);
   const weekEnd = addUTCDays(weekStart, 7);
   const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
-  const occurrences = await listEventOccurrencesForFamily(familyId, weekStart, weekEnd);
+  const occurrences = filterOccurrences(
+    await listEventOccurrencesForFamily(familyId, weekStart, weekEnd),
+    childId,
+    caregiverId
+  );
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -192,6 +270,7 @@ async function WeekView({
         prev={addUTCDays(weekStart, -7)}
         next={addUTCDays(weekStart, 7)}
         label={`${formatDateShort(weekStart)} — ${formatDateShort(addUTCDays(weekStart, 6))}`}
+        query={query}
       />
 
       <div className="flex flex-col gap-4">
@@ -234,13 +313,31 @@ async function WeekView({
   );
 }
 
-async function MonthView({ token, anchor, familyId }: { token: string; anchor: Date; familyId: string }) {
+async function MonthView({
+  token,
+  anchor,
+  familyId,
+  childId,
+  caregiverId,
+  query,
+}: {
+  token: string;
+  anchor: Date;
+  familyId: string;
+  childId: string | undefined;
+  caregiverId: string | undefined;
+  query: string;
+}) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
-  const occurrences = await listEventOccurrencesForFamily(familyId, gridStart, gridEnd);
+  const occurrences = filterOccurrences(
+    await listEventOccurrencesForFamily(familyId, gridStart, gridEnd),
+    childId,
+    caregiverId
+  );
   const countByDay = new Map<string, number>();
   for (const occ of occurrences) {
     countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
@@ -255,7 +352,14 @@ async function MonthView({ token, anchor, familyId }: { token: string; anchor: D
 
   return (
     <div className="flex flex-col gap-3">
-      <NavArrows token={token} view="month" prev={addUTCDays(monthStart, -1)} next={nextMonthStart} label={monthLabel} />
+      <NavArrows
+        token={token}
+        view="month"
+        prev={addUTCDays(monthStart, -1)}
+        next={nextMonthStart}
+        label={monthLabel}
+        query={query}
+      />
 
       <div className="grid grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
@@ -270,7 +374,7 @@ async function MonthView({ token, anchor, familyId }: { token: string; anchor: D
           return (
             <Link
               key={key}
-              href={`/share/${token}?view=day&date=${key}`}
+              href={`/share/${token}?view=day&date=${key}${query}`}
               className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
                 inMonth ? "text-slate-700" : "text-slate-300"
               }`}
