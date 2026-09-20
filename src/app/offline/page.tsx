@@ -1,7 +1,9 @@
+import Image from "next/image";
+
 export default function OfflinePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-4xl">📡</p>
+      <Image src="/logo.png" alt="Kigardeki" width={80} height={80} />
       <h1 className="text-xl font-semibold">Pas de connexion</h1>
       <p className="max-w-sm text-slate-600">
         Impossible de charger cette page. Vérifiez votre connexion et réessayez — les pages déjà
