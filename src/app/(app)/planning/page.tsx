@@ -190,6 +190,7 @@ async function WeekView({
   }
 
   const todayKey = toDateInputValue(new Date());
+  const visibleDays = caregiverId ? days.filter((d) => (byDay.get(toDateInputValue(d))?.length ?? 0) > 0) : days;
 
   return (
     <div className="flex flex-col gap-4">
@@ -203,42 +204,48 @@ async function WeekView({
 
       {children_.length === 0 && <EmptyChildren />}
 
-      <div className="flex flex-col gap-4">
-        {days.map((d) => {
-          const key = toDateInputValue(d);
-          const dayOccurrences = byDay.get(key) ?? [];
-          const isToday = key === todayKey;
-          return (
-            <div key={key} className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-1">
-                <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
-                  {formatDateLong(d)}
-                </p>
-                {isToday && (
-                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
-                    Aujourd&apos;hui
-                  </span>
+      {caregiverId && visibleDays.length === 0 ? (
+        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
+          Cette personne ne garde pas d&apos;enfant cette semaine.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {visibleDays.map((d) => {
+            const key = toDateInputValue(d);
+            const dayOccurrences = byDay.get(key) ?? [];
+            const isToday = key === todayKey;
+            return (
+              <div key={key} className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-1">
+                  <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                    {formatDateLong(d)}
+                  </p>
+                  {isToday && (
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-semibold text-brand-600">
+                      Aujourd&apos;hui
+                    </span>
+                  )}
+                </div>
+                {dayOccurrences.length === 0 ? (
+                  <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {dayOccurrences.map((occ, i) => (
+                      <OccurrenceCard
+                        key={`${occ.id}-${i}`}
+                        occurrence={occ}
+                        familyChildren={children_}
+                        caregivers={caregivers}
+                        editable={editable}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
-              {dayOccurrences.length === 0 ? (
-                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {dayOccurrences.map((occ, i) => (
-                    <OccurrenceCard
-                      key={`${occ.id}-${i}`}
-                      occurrence={occ}
-                      familyChildren={children_}
-                      caregivers={caregivers}
-                      editable={editable}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
