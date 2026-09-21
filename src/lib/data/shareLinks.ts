@@ -32,7 +32,14 @@ export async function listShareLinks(): Promise<ShareLinkDTO[]> {
     where: { familyId: user.familyId, revokedAt: null },
     orderBy: { createdAt: "desc" },
   });
-  return links.map((l) => ({ id: l.id, token: decrypt(l.tokenEncrypted), createdAt: l.createdAt }));
+  return links
+    // Defensive against the deploy window between this code going live and
+    // scripts/backfill-token-hashes.ts finishing on a database that
+    // predates tokenHash/tokenEncrypted: such rows would otherwise crash
+    // this page (decrypt() on a still-null value) instead of just
+    // temporarily omitting that one link.
+    .filter((l): l is typeof l & { tokenEncrypted: string } => Boolean(l.tokenEncrypted))
+    .map((l) => ({ id: l.id, token: decrypt(l.tokenEncrypted), createdAt: l.createdAt }));
 }
 
 export async function revokeShareLink(id: string): Promise<void> {

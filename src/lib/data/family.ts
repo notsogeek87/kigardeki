@@ -40,11 +40,18 @@ export async function listPendingInvitations(): Promise<PendingInvitationDTO[]> 
     where: { familyId: user.familyId, acceptedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    role: row.role,
-    expiresAt: row.expiresAt,
-    token: decrypt(row.tokenEncrypted),
-  }));
+  return rows
+    // Defensive against the deploy window between this code going live and
+    // scripts/backfill-token-hashes.ts finishing on a database that
+    // predates tokenHash/tokenEncrypted: such rows would otherwise crash
+    // this page (decrypt() on a still-null value) instead of just
+    // temporarily omitting that one invitation.
+    .filter((row): row is typeof row & { tokenEncrypted: string } => Boolean(row.tokenEncrypted))
+    .map((row) => ({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      expiresAt: row.expiresAt,
+      token: decrypt(row.tokenEncrypted),
+    }));
 }
