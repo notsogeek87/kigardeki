@@ -73,18 +73,18 @@ model User {
   familyId     String
   createdAt    DateTime @default(now())
 
-  family           Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  caregiverProfile Caregiver?
-  createdEvents    Event[]      @relation("EventCreatedBy")
-  invitationsSent  Invitation[]
+  family            Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  caregiverProfile  Caregiver?
+  createdEvents     Event[]      @relation("EventCreatedBy")
+  invitationsSent   Invitation[]
   shareLinksCreated ShareLink[]
 
   @@index([familyId])
 }
 
 model Child {
-  id       String @id @default(cuid())
-  familyId String
+  id              String   @id @default(cuid())
+  familyId        String
   // The following personal fields are encrypted at the application layer
   // (see src/lib/crypto.ts) before being written to Postgres. birthDate is
   // stored as an encrypted ISO date string rather than a native DateTime
@@ -106,9 +106,9 @@ model Child {
 }
 
 model Caregiver {
-  id       String  @id @default(cuid())
-  familyId String
-  userId   String? @unique
+  id        String            @id @default(cuid())
+  familyId  String
+  userId    String?           @unique
   // firstName, lastName and phone are encrypted at the application layer
   // (see src/lib/crypto.ts).
   firstName String
@@ -120,8 +120,8 @@ model Caregiver {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  family     Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  user       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  family     Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user       User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   eventLinks EventCaregiver[]
 
   @@index([familyId])
@@ -152,7 +152,7 @@ model Event {
   /// exceptionnellement" event excludes that one Wednesday from the
   /// standing recurring schedule without touching any other occurrence.
   /// Unused when recurrenceFrequency is null.
-  excludedDates DateTime[] @default([])
+  excludedDates        DateTime[]           @default([])
 
   createdBy String
   createdAt DateTime @default(now())
@@ -196,12 +196,17 @@ model EventCaregiver {
  * treat it like a password (long, random, never guessable).
  */
 model ShareLink {
-  id        String    @id @default(cuid())
-  familyId  String
-  token     String    @unique
-  createdBy String
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
+  id             String    @id @default(cuid())
+  familyId       String
+  /// HMAC-SHA256(token) — the lookup index for /share/[token]. Never the
+  /// token itself: see src/lib/crypto.ts#hashToken.
+  tokenHash      String    @unique
+  /// AES-256-GCM ciphertext of the token, decrypted only to redisplay the
+  /// link to the parent who created it (see src/lib/crypto.ts).
+  tokenEncrypted String
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
 
   family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
   creator User   @relation(fields: [createdBy], references: [id])
@@ -210,16 +215,21 @@ model ShareLink {
 }
 
 model Invitation {
-  id         String    @id @default(cuid())
-  familyId   String
-  email      String
-  token      String    @unique
-  role       Role      @default(VIEWER)
-  relation   CaregiverRelation?
-  invitedBy  String
-  expiresAt  DateTime
-  acceptedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id             String             @id @default(cuid())
+  familyId       String
+  email          String
+  /// HMAC-SHA256(token) — the lookup index for /invite/[token]. See
+  /// src/lib/crypto.ts#hashToken.
+  tokenHash      String             @unique
+  /// AES-256-GCM ciphertext of the token, decrypted only to redisplay the
+  /// pending invite link to the parent who created it.
+  tokenEncrypted String
+  role           Role               @default(VIEWER)
+  relation       CaregiverRelation?
+  invitedBy      String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime           @default(now())
 
   family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
   inviter User   @relation(fields: [invitedBy], references: [id])

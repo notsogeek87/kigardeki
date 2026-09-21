@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { NetworkStatusBanner } from "@/components/network-status-banner";
@@ -30,7 +31,13 @@ export const viewport: Viewport = {
   themeColor: "#2563eb",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Reading the per-request CSP nonce (set in src/middleware.ts) forces this
+  // layout — and therefore every page under it — to render dynamically, so
+  // a statically-cached page can never ship with a nonce from a different
+  // request than the one that set the response's CSP header.
+  await headers();
+
   return (
     <html lang="fr">
       <body>

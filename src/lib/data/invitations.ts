@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import type { CaregiverRelation, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { decrypt, encrypt } from "@/lib/crypto";
+import { decrypt, encrypt, hashToken } from "@/lib/crypto";
 import { requireParent } from "@/lib/permissions";
 import { hashPassword, pickColor } from "@/lib/data/users";
 import { ensureCaregiverForUser } from "@/lib/data/caregivers";
@@ -36,7 +36,8 @@ export async function createInvitation(input: CreateInvitationInput) {
     data: {
       familyId: user.familyId,
       email,
-      token,
+      tokenHash: hashToken(token),
+      tokenEncrypted: encrypt(token),
       role: input.role,
       relation: input.relation,
       invitedBy: user.id,
@@ -44,7 +45,7 @@ export async function createInvitation(input: CreateInvitationInput) {
     },
   });
 
-  return invitation;
+  return { ...invitation, token };
 }
 
 export type InvitationPreview = {
@@ -56,7 +57,7 @@ export type InvitationPreview = {
 
 export async function getInvitationPreview(token: string): Promise<InvitationPreview | null> {
   const invitation = await prisma.invitation.findUnique({
-    where: { token },
+    where: { tokenHash: hashToken(token) },
     include: { family: true },
   });
   if (!invitation) return null;
@@ -77,7 +78,7 @@ export type AcceptInvitationInput = {
 };
 
 export async function acceptInvitation(input: AcceptInvitationInput) {
-  const invitation = await prisma.invitation.findUnique({ where: { token: input.token } });
+  const invitation = await prisma.invitation.findUnique({ where: { tokenHash: hashToken(input.token) } });
   if (!invitation) throw new Error("Invitation introuvable.");
   if (invitation.acceptedAt) throw new Error("Cette invitation a déjà été utilisée.");
   if (invitation.expiresAt < new Date()) throw new Error("Cette invitation a expiré.");

@@ -45,6 +45,6 @@ export async function listPendingInvitations(): Promise<PendingInvitationDTO[]> 
     email: row.email,
     role: row.role,
     expiresAt: row.expiresAt,
-    token: row.token,
+    token: decrypt(row.tokenEncrypted),
   }));
 }
