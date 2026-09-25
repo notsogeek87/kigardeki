@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "crypto";
 
 /**
  * Application-level encryption for personal data (child/caregiver names,
@@ -61,4 +61,19 @@ export function encryptNullable(plaintext: string | null | undefined): string | 
 export function decryptNullable(payload: string | null | undefined): string | null {
   if (payload === null || payload === undefined) return null;
   return decrypt(payload);
+}
+
+/**
+ * Deterministic HMAC-SHA256, keyed with the same ENCRYPTION_KEY, hex-encoded.
+ *
+ * Used as a lookup index for bearer tokens (ShareLink, Invitation) that must
+ * be looked up by exact value from an unauthenticated request but whose
+ * plaintext should never sit in the database: the token itself is stored
+ * only as {@link encrypt}-ed ciphertext (for redisplay to the parent who
+ * created it), and this hash is what a WHERE clause matches against. Being
+ * keyed means a raw database leak alone (without ENCRYPTION_KEY) yields
+ * neither the token nor a way to test guesses against the hash.
+ */
+export function hashToken(token: string): string {
+  return createHmac("sha256", getKey()).update(token).digest("hex");
 }

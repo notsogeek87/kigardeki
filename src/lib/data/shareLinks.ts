@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/permissions";
+import { decrypt, encrypt, hashToken } from "@/lib/crypto";
 
 export type ShareLinkDTO = {
   id: string;
@@ -14,10 +15,15 @@ export async function createShareLink(): Promise<ShareLinkDTO> {
   const token = randomBytes(24).toString("base64url");
 
   const link = await prisma.shareLink.create({
-    data: { familyId: user.familyId, token, createdBy: user.id },
+    data: {
+      familyId: user.familyId,
+      tokenHash: hashToken(token),
+      tokenEncrypted: encrypt(token),
+      createdBy: user.id,
+    },
   });
 
-  return { id: link.id, token: link.token, createdAt: link.createdAt };
+  return { id: link.id, token, createdAt: link.createdAt };
 }
 
 export async function listShareLinks(): Promise<ShareLinkDTO[]> {
@@ -26,7 +32,14 @@ export async function listShareLinks(): Promise<ShareLinkDTO[]> {
     where: { familyId: user.familyId, revokedAt: null },
     orderBy: { createdAt: "desc" },
   });
-  return links.map((l) => ({ id: l.id, token: l.token, createdAt: l.createdAt }));
+  return links
+    // Defensive against the deploy window between this code going live and
+    // scripts/backfill-token-hashes.ts finishing on a database that
+    // predates tokenHash/tokenEncrypted: such rows would otherwise crash
+    // this page (decrypt() on a still-null value) instead of just
+    // temporarily omitting that one link.
+    .filter((l): l is typeof l & { tokenEncrypted: string } => Boolean(l.tokenEncrypted))
+    .map((l) => ({ id: l.id, token: decrypt(l.tokenEncrypted), createdAt: l.createdAt }));
 }
 
 export async function revokeShareLink(id: string): Promise<void> {
@@ -45,11 +58,10 @@ export async function revokeShareLink(id: string): Promise<void> {
  */
 export async function resolveShareToken(token: string): Promise<{ familyId: string; familyName: string } | null> {
   const link = await prisma.shareLink.findUnique({
-    where: { token },
+    where: { tokenHash: hashToken(token) },
     include: { family: true },
   });
   if (!link || link.revokedAt) return null;
 
-  const { decrypt } = await import("@/lib/crypto");
   return { familyId: link.familyId, familyName: decrypt(link.family.name) };
 }

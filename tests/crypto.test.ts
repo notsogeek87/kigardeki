@@ -33,4 +33,21 @@ describe("crypto (field-level encryption)", () => {
     expect(encryptNullable(undefined)).toBeNull();
     expect(decryptNullable(null)).toBeNull();
   });
+
+  describe("hashToken (bearer-token lookup index)", () => {
+    it("is deterministic — the same token always hashes the same way", async () => {
+      const { hashToken } = await import("@/lib/crypto");
+      expect(hashToken("my-token")).toBe(hashToken("my-token"));
+    });
+
+    it("never matches a different token's hash", async () => {
+      const { hashToken } = await import("@/lib/crypto");
+      expect(hashToken("token-a")).not.toBe(hashToken("token-b"));
+    });
+
+    it("does not reveal the plaintext", async () => {
+      const { hashToken } = await import("@/lib/crypto");
+      expect(hashToken("my-token")).not.toContain("my-token");
+    });
+  });
 });
