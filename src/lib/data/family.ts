@@ -1,13 +1,29 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { requireParent, requireSession } from "@/lib/permissions";
-import { toFamilyDTO, type FamilyDTO } from "@/lib/data/dto";
+import type { FamilyDTO } from "@/lib/data/dto";
+
+export const familyCacheTag = (familyId: string) => `family-${familyId}`;
+
+// Only the still-encrypted row is cached: the layout reads the family on
+// every navigation, but plaintext family data must never land in Next's
+// data cache. Decryption happens after the cache read.
+const getFamilyRowCached = (familyId: string) =>
+  unstable_cache(
+    async () => {
+      const row = await prisma.family.findUniqueOrThrow({ where: { id: familyId } });
+      return { id: row.id, name: row.name, createdAt: row.createdAt.toISOString() };
+    },
+    ["family-row", familyId],
+    { tags: [familyCacheTag(familyId)], revalidate: 300 }
+  )();
 
 export async function getMyFamily(): Promise<FamilyDTO> {
   const user = await requireSession();
-  const row = await prisma.family.findUniqueOrThrow({ where: { id: user.familyId } });
-  return toFamilyDTO(row);
+  const row = await getFamilyRowCached(user.familyId);
+  return { id: row.id, name: decrypt(row.name), createdAt: new Date(row.createdAt) };
 }
 
 export type FamilyMemberDTO = {

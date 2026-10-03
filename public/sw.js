@@ -3,12 +3,11 @@
 // sync — that is explicitly out of scope for the MVP, but this leaves room
 // to add it later (e.g. a background sync queue) without touching the shell.
 //
-// Every same-origin request, including the RSC/data fetches Next.js issues
-// for a client-side <Link> navigation (these are "fetch" requests, not
-// "navigate" ones), goes network-first: the cache is only a fallback for
-// when the network is unreachable. Serving cache-first here would mean a
-// click always shows the previous state of the page until a full reload.
-const CACHE_NAME = "kigardeki-v2";
+// Same-origin requests go network-first: the cache is only a fallback for
+// when the network is unreachable. RSC/data fetches issued by a client-side
+// <Link> navigation are left to the browser untouched: routing them through
+// the worker (plus a cache write per response) only added latency to clicks.
+const CACHE_NAME = "kigardeki-v3";
 const APP_SHELL = ["/", "/today", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/offline"];
 
 self.addEventListener("install", (event) => {
@@ -32,6 +31,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+  if (request.headers.get("RSC") || url.searchParams.has("_rsc")) return;
 
   event.respondWith(
     fetch(request)

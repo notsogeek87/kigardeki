@@ -2,12 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    // Toutes les pages de l'app affichent des données par famille/session
-    // (enfants, plannings, gardes) : le cache client du routeur ne doit
-    // jamais servir une version obsolète après une modification, même en
-    // naviguant vers un onglet déjà visité.
+    // Cache client court : les server actions appellent revalidatePath /
+    // revalidateTag après chaque modification (ce qui vide ce cache), il ne
+    // sert donc qu'à éviter un aller-retour serveur à chaque clic d'onglet.
     staleTimes: {
-      dynamic: 0,
+      dynamic: 30,
     },
   },
   async headers() {
