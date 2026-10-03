@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireParent, requireSession } from "@/lib/permissions";
 import { hashPassword } from "@/lib/data/users";
 import { encrypt } from "@/lib/crypto";
+import { familyCacheTag } from "@/lib/data/family";
 import { createShareLink, revokeShareLink } from "@/lib/data/shareLinks";
 
 const schema = z.object({
@@ -50,6 +51,7 @@ export async function renameFamilyAction(formData: FormData): Promise<void> {
   }
 
   await prisma.family.update({ where: { id: user.familyId }, data: { name: encrypt(parsed.data.name) } });
+  revalidateTag(familyCacheTag(user.familyId));
   redirect("/settings?success=1");
 }
 
