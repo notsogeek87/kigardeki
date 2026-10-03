@@ -2,7 +2,11 @@ import Link from "next/link";
 import { requireSession } from "@/lib/permissions";
 import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
-import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
+import {
+  listEventOccurrences,
+  type EventOccurrenceDTO,
+} from "@/lib/data/events";
+import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { PlanningFilters } from "@/components/planning-filters";
 import {
@@ -13,6 +17,7 @@ import {
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
+  toTimeInputValue,
 } from "@/lib/wall-time";
 
 type View = "day" | "week" | "month";
@@ -26,27 +31,37 @@ function parseDate(value: string | undefined): Date {
 function filterOccurrences(
   occurrences: EventOccurrenceDTO[],
   childId: string | undefined,
-  caregiverId: string | undefined
+  caregiverId: string | undefined,
 ): EventOccurrenceDTO[] {
   return occurrences.filter(
     (occ) =>
-      (!childId || occ.childIds.includes(childId)) && (!caregiverId || occ.caregiverIds.includes(caregiverId))
+      (!childId || occ.childIds.includes(childId)) &&
+      (!caregiverId || occ.caregiverIds.includes(caregiverId)),
   );
 }
 
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    date?: string;
+    child?: string;
+    caregiver?: string;
+  }>;
 }) {
   const params = await searchParams;
   const user = await requireSession();
-  const view: View = params.view === "day" || params.view === "month" ? params.view : "week";
+  const view: View =
+    params.view === "day" || params.view === "month" ? params.view : "week";
   const anchor = parseDate(params.date);
   const childId = params.child || undefined;
   const caregiverId = params.caregiver || undefined;
 
-  const [children, caregivers] = await Promise.all([listChildren(), listCaregivers()]);
+  const [children, caregivers] = await Promise.all([
+    listChildren(),
+    listCaregivers(),
+  ]);
 
   const query = `${params.child ? `&child=${params.child}` : ""}${
     params.caregiver ? `&caregiver=${params.caregiver}` : ""
@@ -103,7 +118,11 @@ export default async function PlanningPage({
             />
           )}
           {view === "month" && (
-            <MonthView anchor={anchor} childId={childId} caregivers={caregivers} />
+            <MonthView
+              anchor={anchor}
+              childId={childId}
+              caregivers={caregivers}
+            />
           )}
         </>
       )}
@@ -111,7 +130,15 @@ export default async function PlanningPage({
   );
 }
 
-function ViewSwitcher({ view, date, query }: { view: View; date: Date; query: string }) {
+function ViewSwitcher({
+  view,
+  date,
+  query,
+}: {
+  view: View;
+  date: Date;
+  query: string;
+}) {
   const dateStr = toDateInputValue(date);
   const tabs: { key: View; label: string }[] = [
     { key: "day", label: "Jour" },
@@ -125,7 +152,9 @@ function ViewSwitcher({ view, date, query }: { view: View; date: Date; query: st
           key={tab.key}
           href={`/planning?view=${tab.key}&date=${dateStr}${query}`}
           className={`tap-target flex-1 rounded-lg text-center text-sm font-medium leading-[38px] ${
-            view === tab.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500"
+            view === tab.key
+              ? "bg-white text-brand-600 shadow-sm"
+              : "text-slate-500"
           }`}
         >
           {tab.label}
@@ -187,7 +216,11 @@ async function WeekView({
   const weekStart = startOfUTCWeek(anchor);
   const weekEnd = addUTCDays(weekStart, 7);
   const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
-  const occurrences = filterOccurrences(await listEventOccurrences(weekStart, weekEnd), childId, undefined);
+  const occurrences = filterOccurrences(
+    await listEventOccurrences(weekStart, weekEnd),
+    childId,
+    undefined,
+  );
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -196,7 +229,9 @@ async function WeekView({
     byDay.get(key)!.push(occ);
   }
   for (const dayOccurrences of byDay.values()) {
-    dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+    dayOccurrences.sort(
+      (a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime(),
+    );
   }
 
   const todayKey = toDateInputValue(new Date());
@@ -221,7 +256,9 @@ async function WeekView({
           return (
             <div key={key} className="flex flex-col gap-2">
               <div className="flex items-center gap-2 px-1">
-                <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+                <p
+                  className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}
+                >
                   {formatDateLong(d)}
                 </p>
                 {isToday && (
@@ -231,7 +268,9 @@ async function WeekView({
                 )}
               </div>
               {dayOccurrences.length === 0 ? (
-                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">Rien de prévu.</p>
+                <p className="rounded-xl bg-white px-4 py-3 text-sm text-slate-400 shadow-sm">
+                  Rien de prévu.
+                </p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {dayOccurrences.map((occ, i) => (
@@ -268,7 +307,11 @@ async function CaregiverAgenda({
 }) {
   const todayStart = startOfUTCDay(new Date());
   const rangeEnd = addUTCDays(todayStart, 90);
-  const occurrences = filterOccurrences(await listEventOccurrences(todayStart, rangeEnd), childId, caregiverId);
+  const occurrences = filterOccurrences(
+    await listEventOccurrences(todayStart, rangeEnd),
+    childId,
+    caregiverId,
+  );
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -278,7 +321,9 @@ async function CaregiverAgenda({
   }
   const sortedDays = Array.from(byDay.keys()).sort();
   for (const dayOccurrences of byDay.values()) {
-    dayOccurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+    dayOccurrences.sort(
+      (a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime(),
+    );
   }
   const todayKey = toDateInputValue(todayStart);
 
@@ -298,7 +343,9 @@ async function CaregiverAgenda({
         return (
           <div key={key} className="flex flex-col gap-2">
             <div className="flex items-center gap-2 px-1">
-              <p className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}>
+              <p
+                className={`text-sm font-semibold capitalize ${isToday ? "text-brand-600" : "text-slate-700"}`}
+              >
                 {formatDateLong(d)}
               </p>
               {isToday && (
@@ -343,8 +390,14 @@ async function DayView({
   const dayStart = new Date(anchor);
   dayStart.setUTCHours(0, 0, 0, 0);
   const dayEnd = addUTCDays(dayStart, 1);
-  const occurrences = filterOccurrences(await listEventOccurrences(dayStart, dayEnd), childId, undefined);
-  occurrences.sort((a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime());
+  const occurrences = filterOccurrences(
+    await listEventOccurrences(dayStart, dayEnd),
+    childId,
+    undefined,
+  );
+  occurrences.sort(
+    (a, b) => a.occurrenceStartAt.getTime() - b.occurrenceStartAt.getTime(),
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -359,7 +412,9 @@ async function DayView({
       {children_.length === 0 && <EmptyChildren />}
 
       {occurrences.length === 0 ? (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">Rien de prévu ce jour.</p>
+        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
+          Rien de prévu ce jour.
+        </p>
       ) : (
         <div className="flex flex-col gap-2">
           {occurrences.map((occ, i) => (
@@ -387,30 +442,48 @@ async function MonthView({
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
 }) {
   const monthStart = startOfUTCMonth(anchor);
-  const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
-  const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    monthStart
+  const nextMonthStart = new Date(
+    Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1),
   );
+  const monthLabel = new Intl.DateTimeFormat("fr-FR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(monthStart);
   const query = childId ? `&child=${childId}` : "";
 
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
-  const occurrences = filterOccurrences(await listEventOccurrences(gridStart, gridEnd), childId, undefined);
-  const countByDay = new Map<string, number>();
-  const colorsByDay = new Map<string, string[]>();
+  const occurrences = filterOccurrences(
+    await listEventOccurrences(gridStart, gridEnd),
+    childId,
+    undefined,
+  );
+  const FALLBACK_COLOR = "#6366f1";
+  // Per day: which half-days each caregiver colour covers.
+  const dotsByDay = new Map<string, Map<string, Set<TimeSlot>>>();
   for (const occ of occurrences) {
-    countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
-    const dayColors = colorsByDay.get(occ.occurrenceDate) ?? [];
-    for (const caregiverIdForOcc of occ.caregiverIds) {
-      const color = caregivers.find((c) => c.id === caregiverIdForOcc)?.color;
-      if (color && !dayColors.includes(color)) dayColors.push(color);
+    const slots = timeToSlots(
+      toTimeInputValue(occ.occurrenceStartAt),
+      toTimeInputValue(occ.occurrenceEndAt),
+    );
+    const dayDots =
+      dotsByDay.get(occ.occurrenceDate) ?? new Map<string, Set<TimeSlot>>();
+    const colors = occ.caregiverIds
+      .map((id) => caregivers.find((c) => c.id === id)?.color)
+      .filter((c): c is string => !!c);
+    for (const color of colors.length > 0 ? colors : [FALLBACK_COLOR]) {
+      const covered = dayDots.get(color) ?? new Set<TimeSlot>();
+      for (const slot of slots) covered.add(slot);
+      dayDots.set(color, covered);
     }
-    colorsByDay.set(occ.occurrenceDate, dayColors);
+    dotsByDay.set(occ.occurrenceDate, dayDots);
   }
 
   const days: Date[] = [];
-  for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
+  for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1))
+    days.push(d);
 
   return (
     <div className="flex flex-col gap-3">
@@ -425,15 +498,17 @@ async function MonthView({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="grid flex-1 grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
           {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-            <div key={i} className="pb-1 text-center text-xs font-semibold text-slate-400">
+            <div
+              key={i}
+              className="pb-1 text-center text-xs font-semibold text-slate-400"
+            >
               {d}
             </div>
           ))}
           {days.map((d) => {
             const key = toDateInputValue(d);
             const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
-            const count = countByDay.get(key) ?? 0;
-            const dayColors = colorsByDay.get(key) ?? [];
+            const dayDots = Array.from(dotsByDay.get(key) ?? []);
             return (
               <Link
                 key={key}
@@ -443,22 +518,16 @@ async function MonthView({
                 }`}
               >
                 {d.getUTCDate()}
-                {count > 0 && (
+                {dayDots.length > 0 && (
                   <span className="mt-0.5 flex items-center gap-0.5">
-                    {dayColors.length > 0 ? (
-                      dayColors
-                        .slice(0, 3)
-                        .map((color, i) => (
-                          <span
-                            key={i}
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: color }}
-                            aria-hidden="true"
-                          />
-                        ))
-                    ) : (
-                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-                    )}
+                    {dayDots.slice(0, 3).map(([color, covered]) => (
+                      <HalfDayDot
+                        key={color}
+                        color={color}
+                        morning={covered.has("MORNING")}
+                        afternoon={covered.has("AFTERNOON")}
+                      />
+                    ))}
                   </span>
                 )}
               </Link>
@@ -467,16 +536,53 @@ async function MonthView({
         </div>
         <CaregiverLegend caregivers={caregivers} />
       </div>
+      <p className="px-1 text-xs text-slate-400">
+        Point plein = journée · moitié haute = matin · moitié basse = après-midi
+      </p>
     </div>
   );
 }
 
-function CaregiverLegend({ caregivers }: { caregivers: { id: string; firstName: string; color: string }[] }) {
+/** Dot filled on the top half for morning, the bottom half for afternoon, fully for both. */
+function HalfDayDot({
+  color,
+  morning,
+  afternoon,
+}: {
+  color: string;
+  morning: boolean;
+  afternoon: boolean;
+}) {
+  const top = morning ? color : "transparent";
+  const bottom = afternoon ? color : "transparent";
+  const label =
+    morning && afternoon ? "Journée" : morning ? "Matin" : "Après-midi";
+  return (
+    <span
+      className="h-2 w-2 rounded-full"
+      style={{
+        background: `linear-gradient(to bottom, ${top} 50%, ${bottom} 50%)`,
+        boxShadow: `inset 0 0 0 1px ${color}`,
+      }}
+      title={label}
+      aria-hidden="true"
+    />
+  );
+}
+
+function CaregiverLegend({
+  caregivers,
+}: {
+  caregivers: { id: string; firstName: string; color: string }[];
+}) {
   if (caregivers.length === 0) return null;
   return (
     <div className="flex shrink-0 flex-row flex-wrap gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:w-40 sm:flex-col">
       {caregivers.map((caregiver) => (
-        <div key={caregiver.id} className="flex items-center gap-2 text-sm text-slate-600">
+        <div
+          key={caregiver.id}
+          className="flex items-center gap-2 text-sm text-slate-600"
+        >
           <span
             className="h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: caregiver.color }}
