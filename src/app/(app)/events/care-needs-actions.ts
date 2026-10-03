@@ -7,6 +7,7 @@ import { createCareNeeds, deleteCareNeed } from "@/lib/data/care-needs";
 import { combineDateAndTime } from "@/lib/wall-time";
 
 const schema = z.object({
+  slots: z.array(z.enum(["MORNING", "AFTERNOON"])).min(1, "Sélectionnez au moins Matin ou Après-midi."),
   childIds: z.array(z.string()).min(1, "Sélectionnez au moins un enfant."),
   dates: z
     .array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
@@ -19,9 +20,10 @@ export async function createCareNeedsAction(formData: FormData): Promise<void> {
     const parsed = schema.parse({
       childIds: formData.getAll("childIds").map(String),
       dates: formData.getAll("dates").map(String),
+      slots: formData.getAll("slots").map(String),
     });
     const dates = Array.from(new Set(parsed.dates)).map((d) => combineDateAndTime(d, "00:00"));
-    await createCareNeeds(parsed.childIds, dates);
+    await createCareNeeds(parsed.childIds, dates, parsed.slots);
   } catch (error) {
     const message =
       error instanceof z.ZodError

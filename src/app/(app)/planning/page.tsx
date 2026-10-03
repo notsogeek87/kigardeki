@@ -4,7 +4,7 @@ import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
 import { countUncoveredNeedDays, listCareNeeds } from "@/lib/data/care-needs";
-import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel } from "@/components/care-need-display";
+import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel, slotsLabel } from "@/components/care-need-display";
 import { deleteCareNeedAction } from "../events/care-needs-actions";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
@@ -42,7 +42,7 @@ function filterOccurrences(
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string; needs?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string }>;
 }) {
   const params = await searchParams;
   const user = await requireSession();
@@ -51,7 +51,6 @@ export default async function PlanningPage({
   const anchor = parseDate(params.date);
   const childId = params.child || undefined;
   const caregiverId = params.caregiver || undefined;
-  const needsOnly = params.needs === "1";
 
   const [children, caregivers, needCount] = await Promise.all([
     listChildren(),
@@ -61,7 +60,7 @@ export default async function PlanningPage({
 
   const query = `${params.child ? `&child=${params.child}` : ""}${
     params.caregiver ? `&caregiver=${params.caregiver}` : ""
-  }${needsOnly ? "&needs=1" : ""}`;
+  }`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -110,7 +109,6 @@ export default async function PlanningPage({
               caregivers={caregivers}
               editable={user.role === "PARENT"}
               childId={childId}
-              needsOnly={needsOnly}
               query={query}
             />
           )}
@@ -121,12 +119,11 @@ export default async function PlanningPage({
               caregivers={caregivers}
               editable={user.role === "PARENT"}
               childId={childId}
-              needsOnly={needsOnly}
               query={query}
             />
           )}
           {view === "month" && (
-            <MonthView anchor={anchor} childId={childId} caregivers={caregivers} children_={children} needsOnly={needsOnly} />
+            <MonthView anchor={anchor} childId={childId} caregivers={caregivers} children_={children} />
           )}
         </>
       )}
@@ -199,7 +196,6 @@ async function WeekView({
   caregivers,
   editable,
   childId,
-  needsOnly,
   query,
 }: {
   anchor: Date;
@@ -207,7 +203,6 @@ async function WeekView({
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   editable: boolean;
   childId: string | undefined;
-  needsOnly: boolean;
   query: string;
 }) {
   const weekStart = startOfUTCWeek(anchor);
@@ -218,9 +213,7 @@ async function WeekView({
   ]);
   const occurrences = filterOccurrences(rawOccurrences, childId, undefined);
   const needsByDay = groupNeeds(rawNeeds.filter((n) => !childId || n.childId === childId), occurrences);
-  const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i)).filter(
-    (d) => !needsOnly || needsByDay.has(toDateInputValue(d))
-  );
+  const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -246,12 +239,6 @@ async function WeekView({
 
       {children_.length === 0 && <EmptyChildren />}
 
-      {needsOnly && days.length === 0 && (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-          Aucune garde à trouver cette semaine.
-        </p>
-      )}
-
       <div className="flex flex-col gap-4">
         {days.map((d) => {
           const key = toDateInputValue(d);
@@ -271,7 +258,7 @@ async function WeekView({
                 )}
                 {need && (
                   <RainbowBadge
-                    label={needLabel(need.childIds, children_)}
+                    label={needLabel(need, children_)}
                     className={need.uncovered ? "" : "opacity-50"}
                   />
                 )}
@@ -377,7 +364,6 @@ async function DayView({
   caregivers,
   editable,
   childId,
-  needsOnly,
   query,
 }: {
   anchor: Date;
@@ -385,7 +371,6 @@ async function DayView({
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   editable: boolean;
   childId: string | undefined;
-  needsOnly: boolean;
   query: string;
 }) {
   const dayStart = new Date(anchor);
@@ -418,15 +403,11 @@ async function DayView({
           className={`rounded-xl px-4 py-3 text-sm font-semibold text-white ${need.uncovered ? "" : "opacity-60"}`}
           style={{ background: RAINBOW }}
         >
-          {needLabel(need.childIds, children_)}
+          {needLabel(need, children_)}
         </p>
       )}
 
-      {needsOnly && !need ? (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-          Aucune garde à trouver ce jour.
-        </p>
-      ) : occurrences.length === 0 ? (
+      {occurrences.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">Rien de prévu ce jour.</p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -450,20 +431,18 @@ async function MonthView({
   childId,
   caregivers,
   children_,
-  needsOnly,
 }: {
   anchor: Date;
   childId: string | undefined;
   caregivers: Awaited<ReturnType<typeof listCaregivers>>;
   children_: Awaited<ReturnType<typeof listChildren>>;
-  needsOnly: boolean;
 }) {
   const monthStart = startOfUTCMonth(anchor);
   const nextMonthStart = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
     monthStart
   );
-  const query = `${childId ? `&child=${childId}` : ""}${needsOnly ? "&needs=1" : ""}`;
+  const query = `${childId ? `&child=${childId}` : ""}`;
 
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
@@ -517,16 +496,15 @@ async function MonthView({
             const dayDots = Array.from(dotsByDay.get(key) ?? []);
             const need = needsByDay.get(key);
             const rainbow = need?.uncovered ?? false;
-            const dimmed = needsOnly && !need;
             return (
               <Link
                 key={key}
                 href={`/planning?view=day&date=${key}${query}`}
                 className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
                   rainbow ? "font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-300"
-                } ${dimmed ? "opacity-30" : ""}`}
+                }`}
                 style={rainbow ? { background: RAINBOW } : undefined}
-                title={need ? needLabel(need.childIds, children_) : undefined}
+                title={need ? needLabel(need, children_) : undefined}
               >
                 {d.getUTCDate()}
                 {dayDots.length > 0 && (
@@ -636,6 +614,7 @@ async function NeedsList({
                     <span key={n.id} className="flex items-center gap-1 text-xs text-slate-600">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: child?.color }} />
                       {child?.firstName}
+                      {n.slots.length < 2 && ` (${slotsLabel(n.slots).toLowerCase()})`}
                     </span>
                   );
                 })}

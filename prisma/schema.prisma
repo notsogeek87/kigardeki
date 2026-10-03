@@ -178,6 +178,9 @@ model CareNeed {
   childId   String
   /// Calendar date, stored at UTC midnight.
   date      DateTime
+  /// Which half-days of `date` need care (at least one is true).
+  morning   Boolean  @default(true)
+  afternoon Boolean  @default(true)
   createdBy String
   createdAt DateTime @default(now())
 

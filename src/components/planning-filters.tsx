@@ -17,7 +17,7 @@ export function PlanningFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  function setParam(key: "child" | "caregiver" | "needs", value: string) {
+  function setParam(key: "child" | "caregiver", value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "ALL") {
       params.delete(key);
@@ -26,10 +26,6 @@ export function PlanningFilters({
     }
     router.push(`${pathname}?${params.toString()}`);
   }
-
-  // The "À garder" tab already lists only the days needing care, so the
-  // filter would be redundant there.
-  const showNeedsFilter = searchParams.get("view") !== "needs";
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -59,17 +55,6 @@ export function PlanningFilters({
           </option>
         ))}
       </select>
-      {showNeedsFilter && (
-        <select
-          aria-label="Filtrer les jours"
-          className={SELECT_CLASS}
-          value={searchParams.get("needs") === "1" ? "1" : "ALL"}
-          onChange={(e) => setParam("needs", e.target.value)}
-        >
-          <option value="ALL">Tous les jours</option>
-          <option value="1">Garde nécessaire uniquement</option>
-        </select>
-      )}
     </div>
   );
 }

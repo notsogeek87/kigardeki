@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 import type { ChildDTO } from "@/lib/data/dto";
+import { TimeSlotCheckboxes } from "@/components/time-slot-checkboxes";
 
 function formatDay(value: string): string {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -50,6 +51,8 @@ export function CareNeedForm({
           ))}
         </div>
       </fieldset>
+
+      <TimeSlotCheckboxes defaultSlots={["MORNING", "AFTERNOON"]} />
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-slate-700">Jours où une garde est nécessaire</span>

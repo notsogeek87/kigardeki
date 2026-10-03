@@ -8,7 +8,7 @@ import {
   countUncoveredNeedDaysForFamily,
   listCareNeedsForFamily,
 } from "@/lib/data/care-needs";
-import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel } from "@/components/care-need-display";
+import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel, slotsLabel } from "@/components/care-need-display";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { PlanningFilters } from "@/components/planning-filters";
 import {
@@ -45,7 +45,7 @@ export default async function SharedPlanningPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string; needs?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; child?: string; caregiver?: string }>;
 }) {
   const { token } = await params;
   const share = await resolveShareToken(token);
@@ -65,7 +65,6 @@ export default async function SharedPlanningPage({
   const anchor = parseDate(sp.date);
   const childId = sp.child || undefined;
   const caregiverId = sp.caregiver || undefined;
-  const needsOnly = sp.needs === "1";
 
   const [children, caregivers, needCount] = await Promise.all([
     listChildrenForFamily(share.familyId),
@@ -73,9 +72,7 @@ export default async function SharedPlanningPage({
     view === "needs" ? Promise.resolve(0) : countUncoveredNeedDaysForFamily(share.familyId),
   ]);
 
-  const query = `${sp.child ? `&child=${sp.child}` : ""}${sp.caregiver ? `&caregiver=${sp.caregiver}` : ""}${
-    needsOnly ? "&needs=1" : ""
-  }`;
+  const query = `${sp.child ? `&child=${sp.child}` : ""}${sp.caregiver ? `&caregiver=${sp.caregiver}` : ""}`;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
@@ -130,7 +127,6 @@ export default async function SharedPlanningPage({
                 children_={children}
                 caregivers={caregivers}
                 childId={childId}
-                needsOnly={needsOnly}
                 query={query}
               />
             ) : view === "week" ? (
@@ -141,7 +137,6 @@ export default async function SharedPlanningPage({
                 children_={children}
                 caregivers={caregivers}
                 childId={childId}
-                needsOnly={needsOnly}
                 query={query}
               />
             ) : (
@@ -152,7 +147,6 @@ export default async function SharedPlanningPage({
                 caregivers={caregivers}
                 children_={children}
                 childId={childId}
-                needsOnly={needsOnly}
                 query={query}
               />
             )}
@@ -206,7 +200,6 @@ async function DayView({
   children_,
   caregivers,
   childId,
-  needsOnly,
   query,
 }: {
   token: string;
@@ -215,7 +208,6 @@ async function DayView({
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
-  needsOnly: boolean;
   query: string;
 }) {
   const dayStart = new Date(anchor);
@@ -247,15 +239,11 @@ async function DayView({
           className={`rounded-xl px-4 py-3 text-sm font-semibold text-white ${need.uncovered ? "" : "opacity-60"}`}
           style={{ background: RAINBOW }}
         >
-          {needLabel(need.childIds, children_)}
+          {needLabel(need, children_)}
         </p>
       )}
 
-      {needsOnly && !need ? (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-          Aucune garde à trouver ce jour.
-        </p>
-      ) : occurrences.length === 0 ? (
+      {occurrences.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">Rien de prévu ce jour.</p>
       ) : (
         occurrences.map((occ, i) => (
@@ -273,7 +261,6 @@ async function WeekView({
   children_,
   caregivers,
   childId,
-  needsOnly,
   query,
 }: {
   token: string;
@@ -282,7 +269,6 @@ async function WeekView({
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   childId: string | undefined;
-  needsOnly: boolean;
   query: string;
 }) {
   const weekStart = startOfUTCWeek(anchor);
@@ -293,9 +279,7 @@ async function WeekView({
   ]);
   const occurrences = filterOccurrences(rawOccurrences, childId, undefined);
   const needsByDay = groupNeeds(rawNeeds.filter((n) => !childId || n.childId === childId), occurrences);
-  const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i)).filter(
-    (d) => !needsOnly || needsByDay.has(toDateInputValue(d))
-  );
+  const days = Array.from({ length: 7 }, (_, i) => addUTCDays(weekStart, i));
 
   const byDay = new Map<string, EventOccurrenceDTO[]>();
   for (const occ of occurrences) {
@@ -320,12 +304,6 @@ async function WeekView({
         query={query}
       />
 
-      {needsOnly && days.length === 0 && (
-        <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm">
-          Aucune garde à trouver cette semaine.
-        </p>
-      )}
-
       <div className="flex flex-col gap-4">
         {days.map((d) => {
           const key = toDateInputValue(d);
@@ -345,7 +323,7 @@ async function WeekView({
                 )}
                 {need && (
                   <RainbowBadge
-                    label={needLabel(need.childIds, children_)}
+                    label={needLabel(need, children_)}
                     className={need.uncovered ? "" : "opacity-50"}
                   />
                 )}
@@ -456,7 +434,6 @@ async function MonthView({
   caregivers,
   children_,
   childId,
-  needsOnly,
   query,
 }: {
   token: string;
@@ -465,7 +442,6 @@ async function MonthView({
   caregivers: Awaited<ReturnType<typeof listCaregiversForFamily>>;
   children_: Awaited<ReturnType<typeof listChildrenForFamily>>;
   childId: string | undefined;
-  needsOnly: boolean;
   query: string;
 }) {
   const monthStart = startOfUTCMonth(anchor);
@@ -523,16 +499,15 @@ async function MonthView({
             const dayColors = colorsByDay.get(key) ?? [];
             const need = needsByDay.get(key);
             const rainbow = need?.uncovered ?? false;
-            const dimmed = needsOnly && !need;
             return (
               <Link
                 key={key}
                 href={`/share/${token}?view=day&date=${key}${query}`}
                 className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
                   rainbow ? "font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-300"
-                } ${dimmed ? "opacity-30" : ""}`}
+                }`}
                 style={rainbow ? { background: RAINBOW } : undefined}
-                title={need ? needLabel(need.childIds, children_) : undefined}
+                title={need ? needLabel(need, children_) : undefined}
               >
                 {d.getUTCDate()}
                 {count > 0 && (
@@ -621,6 +596,7 @@ async function NeedsList({
                     <span key={n.id} className="flex items-center gap-1 text-xs text-slate-600">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: child?.color }} />
                       {child?.firstName}
+                      {n.slots.length < 2 && ` (${slotsLabel(n.slots).toLowerCase()})`}
                     </span>
                   );
                 })}
