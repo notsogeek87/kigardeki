@@ -3,10 +3,15 @@ import { requireSession } from "@/lib/permissions";
 import { getTodayDashboard } from "@/lib/data/dashboard";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { formatDateLong } from "@/lib/wall-time";
+import { countUncoveredNeedDays } from "@/lib/data/care-needs";
+import { CareNeedBanner } from "@/components/care-need-display";
 
 export default async function TodayPage() {
   const user = await requireSession();
-  const { children, caregivers, myUpcoming, todayByChild } = await getTodayDashboard();
+  const [{ children, caregivers, myUpcoming, todayByChild }, needCount] = await Promise.all([
+    getTodayDashboard(),
+    countUncoveredNeedDays(),
+  ]);
   const isParent = user.role === "PARENT";
 
   return (
@@ -22,6 +27,8 @@ export default async function TodayPage() {
           </Link>
         )}
       </div>
+
+      <CareNeedBanner href="/planning?view=needs" count={needCount} />
 
       {!isParent && myUpcoming.length > 0 && (
         <section className="flex flex-col gap-3">

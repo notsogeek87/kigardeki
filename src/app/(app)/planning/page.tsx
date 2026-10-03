@@ -3,7 +3,8 @@ import { requireSession } from "@/lib/permissions";
 import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
-import { listCareNeeds, type CareNeedDTO } from "@/lib/data/care-needs";
+import { countUncoveredNeedDays, listCareNeeds } from "@/lib/data/care-needs";
+import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel } from "@/components/care-need-display";
 import { deleteCareNeedAction } from "../events/care-needs-actions";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
@@ -20,43 +21,6 @@ import {
 } from "@/lib/wall-time";
 
 type View = "day" | "week" | "month" | "needs";
-
-const RAINBOW =
-  "linear-gradient(135deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6)";
-
-type NeedDay = { childIds: string[]; uncovered: boolean };
-
-/**
- * Groups care needs by day. A need is "uncovered" (shown as a rainbow) while
- * nothing is planned that day for the child it concerns.
- */
-function groupNeeds(needs: CareNeedDTO[], occurrences: EventOccurrenceDTO[]): Map<string, NeedDay> {
-  const result = new Map<string, NeedDay>();
-  for (const need of needs) {
-    const covered = occurrences.some((o) => o.occurrenceDate === need.date && o.childIds.includes(need.childId));
-    const day = result.get(need.date) ?? { childIds: [], uncovered: false };
-    day.childIds.push(need.childId);
-    day.uncovered ||= !covered;
-    result.set(need.date, day);
-  }
-  return result;
-}
-
-function RainbowBadge({ label, className = "" }: { label: string; className?: string }) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${className}`}
-      style={{ background: RAINBOW }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function needLabel(childIds: string[], children_: { id: string; firstName: string }[]): string {
-  const names = childIds.map((id) => children_.find((c) => c.id === id)?.firstName).filter(Boolean);
-  return `Garde nécessaire${names.length > 0 ? ` · ${names.join(", ")}` : ""}`;
-}
 
 function parseDate(value: string | undefined): Date {
   if (!value) return new Date();
@@ -89,7 +53,11 @@ export default async function PlanningPage({
   const caregiverId = params.caregiver || undefined;
   const needsOnly = params.needs === "1";
 
-  const [children, caregivers] = await Promise.all([listChildren(), listCaregivers()]);
+  const [children, caregivers, needCount] = await Promise.all([
+    listChildren(),
+    listCaregivers(),
+    view === "needs" ? Promise.resolve(0) : countUncoveredNeedDays(),
+  ]);
 
   const query = `${params.child ? `&child=${params.child}` : ""}${
     params.caregiver ? `&caregiver=${params.caregiver}` : ""
@@ -108,6 +76,8 @@ export default async function PlanningPage({
           </Link>
         )}
       </div>
+
+      <CareNeedBanner href="/planning?view=needs" count={needCount} />
 
       {(children.length > 0 || caregivers.length > 0) && (
         <PlanningFilters children_={children} caregivers={caregivers} />
