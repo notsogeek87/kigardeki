@@ -58,6 +58,7 @@ model Family {
   children    Child[]
   caregivers  Caregiver[]
   events      Event[]
+  careNeeds   CareNeed[]
   invitations Invitation[]
   shareLinks  ShareLink[]
 }
@@ -76,6 +77,7 @@ model User {
   family            Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
   caregiverProfile  Caregiver?
   createdEvents     Event[]      @relation("EventCreatedBy")
+  careNeedsCreated  CareNeed[]
   invitationsSent   Invitation[]
   shareLinksCreated ShareLink[]
 
@@ -101,6 +103,7 @@ model Child {
 
   family     Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
   eventLinks EventChild[]
+  careNeeds  CareNeed[]
 
   @@index([familyId])
 }
@@ -164,6 +167,26 @@ model Event {
   caregivers EventCaregiver[]
 
   @@index([familyId, startAt])
+}
+
+/// A day on which a child needs someone to look after them and nobody has
+/// been found yet. Purely informational: it tells the family "I need
+/// childcare that day". One row per (child, calendar date).
+model CareNeed {
+  id        String   @id @default(cuid())
+  familyId  String
+  childId   String
+  /// Calendar date, stored at UTC midnight.
+  date      DateTime
+  createdBy String
+  createdAt DateTime @default(now())
+
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child   Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [createdBy], references: [id])
+
+  @@unique([childId, date])
+  @@index([familyId, date])
 }
 
 model EventChild {

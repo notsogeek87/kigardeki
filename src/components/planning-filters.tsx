@@ -17,7 +17,7 @@ export function PlanningFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  function setParam(key: "child" | "caregiver", value: string) {
+  function setParam(key: "child" | "caregiver" | "needs", value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "ALL") {
       params.delete(key);
@@ -28,33 +28,44 @@ export function PlanningFilters({
   }
 
   return (
-    <div className="flex gap-2">
-      <select
-        aria-label="Filtrer par enfant"
-        className={SELECT_CLASS}
-        value={searchParams.get("child") ?? "ALL"}
-        onChange={(e) => setParam("child", e.target.value)}
-      >
-        <option value="ALL">Tous les enfants</option>
-        {children_.map((child) => (
-          <option key={child.id} value={child.id}>
-            {child.firstName}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Filtrer par personne qui garde"
-        className={SELECT_CLASS}
-        value={searchParams.get("caregiver") ?? "ALL"}
-        onChange={(e) => setParam("caregiver", e.target.value)}
-      >
-        <option value="ALL">Toutes les personnes</option>
-        {caregivers.map((caregiver) => (
-          <option key={caregiver.id} value={caregiver.id}>
-            {caregiver.firstName}
-          </option>
-        ))}
-      </select>
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <select
+          aria-label="Filtrer par enfant"
+          className={SELECT_CLASS}
+          value={searchParams.get("child") ?? "ALL"}
+          onChange={(e) => setParam("child", e.target.value)}
+        >
+          <option value="ALL">Tous les enfants</option>
+          {children_.map((child) => (
+            <option key={child.id} value={child.id}>
+              {child.firstName}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrer par personne qui garde"
+          className={SELECT_CLASS}
+          value={searchParams.get("caregiver") ?? "ALL"}
+          onChange={(e) => setParam("caregiver", e.target.value)}
+        >
+          <option value="ALL">Toutes les personnes</option>
+          {caregivers.map((caregiver) => (
+            <option key={caregiver.id} value={caregiver.id}>
+              {caregiver.firstName}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="flex cursor-pointer items-center gap-2 px-1 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          checked={searchParams.get("needs") === "1"}
+          onChange={(e) => setParam("needs", e.target.checked ? "1" : "ALL")}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        Jours avec garde nécessaire uniquement
+      </label>
     </div>
   );
 }
