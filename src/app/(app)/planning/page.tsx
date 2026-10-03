@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/permissions";
 import { listChildren } from "@/lib/data/children";
 import { listCaregivers } from "@/lib/data/caregivers";
 import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events";
+import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { PlanningFilters } from "@/components/planning-filters";
 import {
@@ -13,6 +14,7 @@ import {
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
+  toTimeInputValue,
 } from "@/lib/wall-time";
 
 type View = "day" | "week" | "month";
@@ -397,16 +399,21 @@ async function MonthView({
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
   const occurrences = filterOccurrences(await listEventOccurrences(gridStart, gridEnd), childId, undefined);
-  const countByDay = new Map<string, number>();
-  const colorsByDay = new Map<string, string[]>();
+  const FALLBACK_COLOR = "#6366f1";
+  // Per day: which half-days each caregiver colour covers.
+  const dotsByDay = new Map<string, Map<string, Set<TimeSlot>>>();
   for (const occ of occurrences) {
-    countByDay.set(occ.occurrenceDate, (countByDay.get(occ.occurrenceDate) ?? 0) + 1);
-    const dayColors = colorsByDay.get(occ.occurrenceDate) ?? [];
-    for (const caregiverIdForOcc of occ.caregiverIds) {
-      const color = caregivers.find((c) => c.id === caregiverIdForOcc)?.color;
-      if (color && !dayColors.includes(color)) dayColors.push(color);
+    const slots = timeToSlots(toTimeInputValue(occ.occurrenceStartAt), toTimeInputValue(occ.occurrenceEndAt));
+    const dayDots = dotsByDay.get(occ.occurrenceDate) ?? new Map<string, Set<TimeSlot>>();
+    const colors = occ.caregiverIds
+      .map((id) => caregivers.find((c) => c.id === id)?.color)
+      .filter((c): c is string => !!c);
+    for (const color of colors.length > 0 ? colors : [FALLBACK_COLOR]) {
+      const covered = dayDots.get(color) ?? new Set<TimeSlot>();
+      for (const slot of slots) covered.add(slot);
+      dayDots.set(color, covered);
     }
-    colorsByDay.set(occ.occurrenceDate, dayColors);
+    dotsByDay.set(occ.occurrenceDate, dayDots);
   }
 
   const days: Date[] = [];
@@ -432,8 +439,7 @@ async function MonthView({
           {days.map((d) => {
             const key = toDateInputValue(d);
             const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
-            const count = countByDay.get(key) ?? 0;
-            const dayColors = colorsByDay.get(key) ?? [];
+            const dayDots = Array.from(dotsByDay.get(key) ?? []);
             return (
               <Link
                 key={key}
@@ -443,22 +449,11 @@ async function MonthView({
                 }`}
               >
                 {d.getUTCDate()}
-                {count > 0 && (
+                {dayDots.length > 0 && (
                   <span className="mt-0.5 flex items-center gap-0.5">
-                    {dayColors.length > 0 ? (
-                      dayColors
-                        .slice(0, 3)
-                        .map((color, i) => (
-                          <span
-                            key={i}
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: color }}
-                            aria-hidden="true"
-                          />
-                        ))
-                    ) : (
-                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true" />
-                    )}
+                    {dayDots.slice(0, 3).map(([color, covered]) => (
+                      <HalfDayDot key={color} color={color} morning={covered.has("MORNING")} afternoon={covered.has("AFTERNOON")} />
+                    ))}
                   </span>
                 )}
               </Link>
@@ -467,7 +462,25 @@ async function MonthView({
         </div>
         <CaregiverLegend caregivers={caregivers} />
       </div>
+      <p className="px-1 text-xs text-slate-400">
+        Point plein = journée · moitié haute = matin · moitié basse = après-midi
+      </p>
     </div>
+  );
+}
+
+/** Dot filled on the top half for morning, the bottom half for afternoon, fully for both. */
+function HalfDayDot({ color, morning, afternoon }: { color: string; morning: boolean; afternoon: boolean }) {
+  const top = morning ? color : "transparent";
+  const bottom = afternoon ? color : "transparent";
+  const label = morning && afternoon ? "Journée" : morning ? "Matin" : "Après-midi";
+  return (
+    <span
+      className="h-2 w-2 rounded-full"
+      style={{ background: `linear-gradient(to bottom, ${top} 50%, ${bottom} 50%)`, boxShadow: `inset 0 0 0 1px ${color}` }}
+      title={label}
+      aria-hidden="true"
+    />
   );
 }
 
