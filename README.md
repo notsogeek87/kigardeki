@@ -136,6 +136,10 @@ comme événement séparé si besoin) — voir `trimSupersededRecurringEvents`
 dans `src/lib/data/events.ts`. Un événement ponctuel ne modifie jamais un
 planning permanent existant.
 
+Après l'enregistrement d'une garde, on retombe sur la vue **mois** du
+planning — voir [docs/guides/ajouter-une-garde.md](docs/guides/ajouter-une-garde.md)
+(index complet : [docs/README.md](docs/README.md)).
+
 ## PWA
 
 - `public/manifest.webmanifest`, `public/sw.js`, icônes dans `public/icons/`
