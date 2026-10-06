@@ -73,6 +73,11 @@ function parseInput(formData: FormData): EventInput {
   };
 }
 
+function monthPlanningPath(formData?: FormData): string {
+  const date = formData?.get("date");
+  return typeof date === "string" && date ? `/planning?view=month&date=${date}` : "/planning?view=month";
+}
+
 function redirectWithError(path: string, error: unknown): never {
   const message = error instanceof Error ? error.message : "Une erreur est survenue.";
   redirect(`${path}?error=${encodeURIComponent(message)}`);
@@ -87,7 +92,7 @@ export async function createEventAction(formData: FormData): Promise<void> {
   }
   revalidatePath("/planning");
   revalidatePath("/today");
-  redirect("/planning");
+  redirect(monthPlanningPath(formData));
 }
 
 export async function updateEventAction(eventId: string, formData: FormData): Promise<void> {
@@ -99,7 +104,7 @@ export async function updateEventAction(eventId: string, formData: FormData): Pr
   }
   revalidatePath("/planning");
   revalidatePath("/today");
-  redirect("/planning");
+  redirect(monthPlanningPath(formData));
 }
 
 export async function deleteEventAction(eventId: string): Promise<void> {
@@ -110,5 +115,5 @@ export async function deleteEventAction(eventId: string): Promise<void> {
   }
   revalidatePath("/planning");
   revalidatePath("/today");
-  redirect("/planning");
+  redirect(monthPlanningPath());
 }
