@@ -113,7 +113,8 @@ export default async function SharedPlanningPage({
   }
 
   const sp = await searchParams;
-  const view: View = sp.view === "day" || sp.view === "month" || sp.view === "needs" ? sp.view : "week";
+  // Month first: the half-day grid is the quickest way to see who has the children when.
+  const view: View = sp.view === "day" || sp.view === "week" || sp.view === "needs" ? sp.view : "month";
   const anchor = parseDate(sp.date);
   const childId = sp.child || undefined;
   const caregiverId = sp.caregiver || undefined;
@@ -121,7 +122,9 @@ export default async function SharedPlanningPage({
   const [children, caregivers, needCount] = await Promise.all([
     listChildrenForFamily(share.familyId),
     listCaregiversForFamily(share.familyId),
-    view === "needs" ? Promise.resolve(0) : countUncoveredNeedDaysForFamily(share.familyId),
+    // The banner is hidden on the "needs" list and on someone's own agenda: skip
+    // its year-long scan there, it was most of the wait after tapping a name.
+    view === "needs" || caregiverId ? Promise.resolve(0) : countUncoveredNeedDaysForFamily(share.familyId),
   ]);
 
   const query = `${sp.child ? `&child=${sp.child}` : ""}${sp.caregiver ? `&caregiver=${sp.caregiver}` : ""}`;
