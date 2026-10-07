@@ -28,6 +28,14 @@ textarea {
   min-height: 44px;
 }
 
+/*
+ * The public share page is mostly read by grandparents: scale the whole page
+ * (every rem-based Tailwind size) up by 12.5% — 16px body text becomes 18px.
+ */
+html:has(.share-root) {
+  font-size: 112.5%;
+}
+
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }

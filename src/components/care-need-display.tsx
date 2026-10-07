@@ -3,8 +3,11 @@ import type { CareNeedDTO } from "@/lib/data/care-needs";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { toTimeInputValue } from "@/lib/wall-time";
 
+// Darker (700) stops so the white text on top keeps at least a 4.5:1
+// contrast ratio everywhere along the gradient — the previous 500 stops
+// dropped to ~2:1 on the yellow band.
 export const RAINBOW =
-  "linear-gradient(135deg, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6)";
+  "linear-gradient(135deg, #b91c1c, #c2410c, #a16207, #15803d, #1d4ed8, #6d28d9)";
 
 export type NeedEntry = { childId: string; slots: TimeSlot[] };
 export type NeedDay = {
@@ -70,7 +73,7 @@ export function RainbowBadge({
 }) {
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${className}`}
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold text-white ${className}`}
       style={{ background: RAINBOW }}
     >
       {label}
@@ -81,6 +84,7 @@ export function RainbowBadge({
 export function needLabel(
   day: NeedDay,
   children_: { id: string; firstName: string }[],
+  prefix = "Garde nécessaire",
 ): string {
   const names = day.entries
     .map((e) => {
@@ -91,7 +95,7 @@ export function needLabel(
         : `${name} (${slotsLabel(e.slots).toLowerCase()})`;
     })
     .filter(Boolean);
-  return `Garde nécessaire${names.length > 0 ? ` · ${names.join(", ")}` : ""}`;
+  return `${prefix}${names.length > 0 ? ` · ${names.join(", ")}` : ""}`;
 }
 
 /** Prominent call-out linking to the "À garder" list, shown to everyone. */

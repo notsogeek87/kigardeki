@@ -27,7 +27,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // No maximumScale: pinch-to-zoom must stay available (WCAG 1.4.4) — the
+  // share link is mostly read by grandparents who rely on it.
   themeColor: "#2563eb",
 };
 
