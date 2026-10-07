@@ -45,35 +45,23 @@ Légende : 🔴 bloquant · 🟠 important · 🟡 confort · ✅ corrigé dans 
 | 3.6 | **« Ajouter à l'écran d'accueil » depuis le lien de partage ouvre… la page de connexion des parents** (le manifeste global démarre sur `/today`). | 🔴 | Manifeste spécifique au lien (`/share/<token>/manifest`) qui rouvre ce planning ; instructions iPhone/Android dans l'aide. | ✅ |
 | 3.7 | La page était indexable par les moteurs de recherche. | 🟠 | `noindex, nofollow` (+ `X-Robots-Tag` sur le manifeste). | ✅ |
 
-## 4. Propositions non implémentées (à arbitrer)
+## 4. Vue « Mois » repensée
 
-Classées par rapport valeur / effort.
+La grille du mois était la vue la plus riche mais la moins lisible : des points de
+couleur de 6 px, et un jour « à trouver » entièrement recouvert d'arc-en-ciel qui
+masquait tout le reste.
 
-1. **Lien personnel par personne** (🟠, effort moyen) — créer depuis Réglages un lien
-   « pour Mamie » qui ouvre directement sur *ses* gardes (`?caregiver=` mémorisé côté
-   serveur dans le `ShareLink`). Plus besoin de choisir son prénom : zéro manipulation.
-2. **Bouton « Je suis disponible »** sur chaque jour « Garde à trouver » (🟠, effort
-   moyen) — ouvre un SMS pré-rempli vers un parent (`sms:+33…?body=Je peux garder
-   Léo mardi 14 au matin`). Nécessite de stocker un numéro de téléphone parent. Le
-   SMS est le canal que ce public maîtrise le mieux.
-3. **Côté parents : bouton « Envoyer par SMS / WhatsApp »** à côté de « Copier le
-   lien » dans Réglages (🟠, faible effort) — via `navigator.share()` avec un message
-   d'accompagnement (« Voici le planning des enfants, gardez ce message »). Copier une
-   URL puis la coller est la vraie barrière à l'adoption.
-4. **Vue par défaut « À venir »** (🟡, faible effort) — la semaine commence lundi et
-   montre des jours passés ; une liste « aujourd'hui et les 14 prochains jours » sans
-   jours vides serait plus directe que la grille Semaine.
-5. **Version imprimable** (🟡, faible effort) — feuille de style `@media print` + bouton
-   « Imprimer ce mois ». Beaucoup de grands-parents aiment le planning sur le frigo.
-6. **Rappel la veille** (🟡, effort élevé) — e-mail ou SMS « Demain, vous gardez Léo
-   le matin ». Nécessite un service d'envoi.
-7. **Icônes émoji** (🟡) — 🏫 👶 👵 s'affichent différemment selon les téléphones (et
-   pas du tout sur certains vieux Android). Le libellé texte est toujours présent, donc
-   non bloquant ; à terme, des icônes SVG.
-8. **Test utilisateur** — 3 personnes de la cible, 15 min chacune, avec 3 tâches :
-   « Quand gardez-vous les enfants la semaine prochaine ? », « Les parents ont-ils
-   besoin de quelqu'un en novembre ? », « Revenez à aujourd'hui ». C'est le seul moyen
-   de valider les points 2.7 et 4.
+| Avant | Après | État |
+|-------|-------|------|
+| 1 à 3 points de couleur par jour, sans savoir quand | **Chaque case est coupée en deux : matin en haut, après-midi en bas**, peinte de la couleur de la personne qui garde | ✅ |
+| Couleur seule (daltonisme) | **Prénom court écrit dans la couleur** (« Papi », « Mami », « Mama » : on raccourcit seulement jusqu'à ce que ce soit sans ambiguïté) | ✅ |
+| Jour entier en arc-en-ciel | Seule la **demi-journée manquante** passe en arc-en-ciel avec un « ? » | ✅ |
+| École/crèche = même point que les gardes | Gris clair, sans icône : le regard va directement aux couleurs des gardes | ✅ |
+| Jours des mois voisins aussi chargés que les autres | Juste un chiffre très pâle | ✅ |
+| Jours passés au même niveau | Jours passés estompés ; aujourd'hui = cadre et pastille bleus | ✅ |
+| Week-ends non distingués | Fond légèrement grisé, en-têtes Sam/Dim plus clairs | ✅ |
+| Légende latérale avec toutes les personnes | Légende sous la grille, **limitée à ce qui apparaît ce mois-ci**, avec un mini-schéma « matin / après-midi » | ✅ |
+| `title` au survol (inexistant sur mobile) | Chaque case a une description lue par les lecteurs d'écran (« mardi 14 octobre — matin : Papi ; après-midi : garde à trouver ») | ✅ |
 
 ## 5. Côté application parents (hors lien de partage, pour mémoire)
 
@@ -90,5 +78,5 @@ Classées par rapport valeur / effort.
 - `src/app/layout.tsx` — zoom réactivé.
 - `src/app/globals.css` — agrandissement de la page de partage (`.share-root`).
 - `src/components/care-need-display.tsx` — arc-en-ciel contrasté, badges 12 px, `needLabel` paramétrable.
-- `src/app/share/[token]/page.tsx` — refonte de la page de partage.
+- `src/app/share/[token]/page.tsx` — refonte de la page de partage, dont la grille du mois.
 - `src/app/share/[token]/manifest/route.ts` — manifeste propre au lien.

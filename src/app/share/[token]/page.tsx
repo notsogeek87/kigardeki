@@ -19,7 +19,10 @@ import {
   slotsLabel,
   type NeedDay,
 } from "@/components/care-need-display";
+import type { EventType } from "@prisma/client";
 import { OccurrenceCard } from "@/components/occurrence-card";
+import { EVENT_TYPE_LABEL } from "@/lib/labels";
+import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import {
   addUTCDays,
   formatDateLong,
@@ -27,6 +30,7 @@ import {
   startOfUTCMonth,
   startOfUTCWeek,
   toDateInputValue,
+  toTimeInputValue,
 } from "@/lib/wall-time";
 
 /*
@@ -586,6 +590,49 @@ async function CaregiverAgenda({
   );
 }
 
+/** What happens during one half-day of the month grid. */
+type HalfDay = {
+  caregiverIds: string[];
+  /** Event types with nobody from the family attached (school, daycare…). */
+  otherTypes: EventType[];
+  /** A care need asks for this half-day and nobody covers it yet. */
+  needed: boolean;
+};
+
+const SLOTS: TimeSlot[] = ["MORNING", "AFTERNOON"];
+
+function emptyHalf(): HalfDay {
+  return { caregiverIds: [], otherTypes: [], needed: false };
+}
+
+/**
+ * Shortest start of each first name that no one else shares, capped at 4
+ * letters: "M" alone when possible, but "Mami" / "Mama" for Mamie / Maman.
+ */
+function caregiverInitials(caregivers: Caregivers): Map<string, string> {
+  const names = caregivers.map((c) => c.firstName.trim());
+  return new Map(
+    caregivers.map((c, i) => {
+      const name = names[i]!;
+      let length = 1;
+      while (
+        length < 4 &&
+        names.some((other, j) => j !== i && other.slice(0, length).toLowerCase() === name.slice(0, length).toLowerCase())
+      ) {
+        length++;
+      }
+      const prefix = name.slice(0, length);
+      return [c.id, prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase()];
+    })
+  );
+}
+
+/**
+ * Month grid built for readability: every day cell is split in two — morning
+ * on top, afternoon below — and each half is painted with the colour and
+ * initial of whoever has the children then. A half-day still to be covered
+ * is a rainbow "?"; school/daycare halves are a quiet grey with their icon.
+ */
 async function MonthView({
   token,
   anchor,
@@ -617,16 +664,65 @@ async function MonthView({
     listCareNeedsForFamily(familyId, gridStart, gridEnd),
   ]);
   const occurrences = filterOccurrences(rawOccurrences, childId, undefined);
-  const needsByDay = groupNeeds(rawNeeds.filter((n) => !childId || n.childId === childId), occurrences);
-  const colorsByDay = new Map<string, string[]>();
-  for (const occ of occurrences) {
-    const dayColors = colorsByDay.get(occ.occurrenceDate) ?? [];
-    for (const caregiverIdForOcc of occ.caregiverIds) {
-      const color = caregivers.find((c) => c.id === caregiverIdForOcc)?.color;
-      if (color && !dayColors.includes(color)) dayColors.push(color);
+  const needs = rawNeeds.filter((n) => !childId || n.childId === childId);
+
+  const slotsOf = (occ: EventOccurrenceDTO) =>
+    timeToSlots(toTimeInputValue(occ.occurrenceStartAt), toTimeInputValue(occ.occurrenceEndAt));
+
+  const halves = new Map<string, Record<TimeSlot, HalfDay>>();
+  const halvesFor = (key: string) => {
+    let day = halves.get(key);
+    if (!day) {
+      day = { MORNING: emptyHalf(), AFTERNOON: emptyHalf() };
+      halves.set(key, day);
     }
-    colorsByDay.set(occ.occurrenceDate, dayColors);
+    return day;
+  };
+
+  for (const occ of occurrences) {
+    const day = halvesFor(occ.occurrenceDate);
+    for (const slot of slotsOf(occ)) {
+      const half = day[slot];
+      if (occ.caregiverIds.length > 0) {
+        for (const id of occ.caregiverIds) if (!half.caregiverIds.includes(id)) half.caregiverIds.push(id);
+      } else if (!half.otherTypes.includes(occ.type)) {
+        half.otherTypes.push(occ.type);
+      }
+    }
   }
+  // Same coverage rule as groupNeeds(), but kept per half-day so the grid can
+  // show *which* half is missing someone.
+  for (const need of needs) {
+    const covered = new Set<TimeSlot>();
+    for (const occ of occurrences) {
+      if (occ.occurrenceDate === need.date && occ.childIds.includes(need.childId)) {
+        for (const slot of slotsOf(occ)) covered.add(slot);
+      }
+    }
+    for (const slot of need.slots) if (!covered.has(slot)) halvesFor(need.date)[slot].needed = true;
+  }
+
+  const caregiverById = new Map(caregivers.map((c) => [c.id, c]));
+  const initials = caregiverInitials(caregivers);
+  const usedCaregiverIds = new Set<string>();
+  const usedTypes = new Set<EventType>();
+  let anyNeeded = false;
+  for (const [key, day] of halves) {
+    if (key < toDateInputValue(monthStart) || key >= toDateInputValue(nextMonthStart)) continue;
+    for (const slot of SLOTS) {
+      day[slot].caregiverIds.forEach((id) => usedCaregiverIds.add(id));
+      day[slot].otherTypes.forEach((t) => usedTypes.add(t));
+      anyNeeded ||= day[slot].needed;
+    }
+  }
+
+  const describeHalf = (half: HalfDay): string => {
+    if (half.needed) return "garde à trouver";
+    const names = half.caregiverIds.map((id) => caregiverById.get(id)?.firstName).filter(Boolean);
+    if (names.length > 0) return names.join(" et ");
+    if (half.otherTypes.length > 0) return half.otherTypes.map((t) => EVENT_TYPE_LABEL[t]).join(", ");
+    return "rien de prévu";
+  };
 
   const days: Date[] = [];
   for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
@@ -644,63 +740,180 @@ async function MonthView({
         query={query}
       />
 
-      <p className="px-1 text-sm text-slate-600">Touchez un jour pour voir le détail.</p>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="grid flex-1 grid-cols-7 gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
-            <div key={d} className="pb-1 text-center text-xs font-semibold text-slate-600">
+      <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+        <div className="grid grid-cols-7 gap-1">
+          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d, i) => (
+            <div
+              key={d}
+              className={`py-1 text-center text-xs font-bold uppercase ${i >= 5 ? "text-slate-500" : "text-slate-700"}`}
+            >
               {d}
             </div>
           ))}
           {days.map((d) => {
             const key = toDateInputValue(d);
             const inMonth = d.getUTCMonth() === monthStart.getUTCMonth();
-            const dayColors = colorsByDay.get(key) ?? [];
-            const hasEvents = colorsByDay.has(key);
-            const need = needsByDay.get(key);
-            const rainbow = need?.uncovered ?? false;
             const isToday = key === todayKey;
+            const isPast = key < todayKey;
+            const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6;
+            const day = halves.get(key);
+
+            if (!inMonth) {
+              // Neighbouring months: just a faint number, no content, to keep the eye on this month.
+              return (
+                <div key={key} className="flex h-[4.25rem] items-start justify-center pt-1 text-sm text-slate-300">
+                  {d.getUTCDate()}
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={key}
                 href={`/share/${token}?view=day&date=${key}${query}`}
-                aria-label={`${formatDateLong(d)}${rainbow ? ", garde à trouver" : ""}`}
-                className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-base ${
-                  rainbow ? "font-bold text-white" : inMonth ? "text-slate-900" : "text-slate-400"
-                } ${isToday ? "ring-2 ring-brand-600" : ""}`}
-                style={rainbow ? { background: RAINBOW } : undefined}
+                aria-label={`${formatDateLong(d)} — matin : ${describeHalf(day?.MORNING ?? emptyHalf())} ; après-midi : ${describeHalf(day?.AFTERNOON ?? emptyHalf())}`}
+                className={`flex h-[4.25rem] flex-col overflow-hidden rounded-lg border active:opacity-70 ${
+                  isToday ? "border-2 border-brand-600" : "border-slate-200"
+                } ${isWeekend ? "bg-slate-50" : "bg-white"} ${isPast && !isToday ? "opacity-50" : ""}`}
               >
-                {d.getUTCDate()}
-                {hasEvents && (
-                  <span className="mt-0.5 flex items-center gap-0.5" aria-hidden="true">
-                    {dayColors.length > 0 ? (
-                      dayColors
-                        .slice(0, 3)
-                        .map((color, i) => (
-                          <span
-                            key={i}
-                            className="h-2 w-2 rounded-full ring-1 ring-white"
-                            style={{ backgroundColor: color }}
-                          />
-                        ))
-                    ) : (
-                      <span className="h-2 w-2 rounded-full bg-brand-500" />
-                    )}
+                <span className="flex h-6 shrink-0 items-center justify-center">
+                  <span
+                    className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-sm font-bold leading-none ${
+                      isToday ? "bg-brand-600 text-white" : "text-slate-900"
+                    }`}
+                  >
+                    {d.getUTCDate()}
                   </span>
-                )}
+                </span>
+                <span className="flex flex-1 flex-col gap-px" aria-hidden="true">
+                  {SLOTS.map((slot) => (
+                    <HalfDayBar
+                      key={slot}
+                      half={day?.[slot] ?? emptyHalf()}
+                      caregiverById={caregiverById}
+                      initials={initials}
+                    />
+                  ))}
+                </span>
               </Link>
             );
           })}
         </div>
-        <CaregiverLegend caregivers={caregivers} />
       </div>
-      <p className="px-1 text-sm text-slate-700">
-        <span className="rounded px-1.5 py-0.5 font-semibold text-white" style={{ background: RAINBOW }}>
-          Jour en couleurs
-        </span>{" "}
-        = il faut encore trouver quelqu&apos;un pour garder.
-      </p>
+
+      <MonthLegend
+        caregivers={caregivers.filter((c) => usedCaregiverIds.has(c.id))}
+        initials={initials}
+        types={Array.from(usedTypes)}
+        anyNeeded={anyNeeded}
+      />
+    </div>
+  );
+}
+
+function HalfDayBar({
+  half,
+  caregiverById,
+  initials,
+}: {
+  half: HalfDay;
+  caregiverById: Map<string, Caregivers[number]>;
+  initials: Map<string, string>;
+}) {
+  const segment = "flex min-w-0 flex-1 items-center justify-center text-xs font-bold leading-none";
+
+  if (half.needed) {
+    return (
+      <span className="flex flex-1">
+        <span className={`${segment} text-white`} style={{ background: RAINBOW }}>
+          ?
+        </span>
+      </span>
+    );
+  }
+  if (half.caregiverIds.length > 0) {
+    const shown = half.caregiverIds.slice(0, 2);
+    return (
+      <span className="flex flex-1 gap-px">
+        {shown.map((id) => (
+          <span
+            key={id}
+            className={`${segment} overflow-hidden text-white ${
+              shown.length > 1 ? "text-[0.6rem]" : initials.get(id)!.length > 3 ? "text-[0.7rem]" : ""
+            }`}
+            style={{ backgroundColor: caregiverById.get(id)?.color }}
+          >
+            {/* Two people in one half-day: only the first letter fits; the colour tells them apart. */}
+            {shown.length > 1 ? initials.get(id)!.charAt(0) : initials.get(id)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (half.otherTypes.length > 0) {
+    return (
+      <span className="flex flex-1">
+        {/* Plain grey, no icon: school days repeat all month and icons would drown the colours. */}
+        <span className={`${segment} bg-slate-200`} />
+      </span>
+    );
+  }
+  return <span className="flex-1" />;
+}
+
+/** Legend under the grid, limited to what this month actually shows. */
+function MonthLegend({
+  caregivers,
+  initials,
+  types,
+  anyNeeded,
+}: {
+  caregivers: Caregivers;
+  initials: Map<string, string>;
+  types: EventType[];
+  anyNeeded: boolean;
+}) {
+  const swatch = "flex h-7 min-w-[1.75rem] shrink-0 px-1 items-center justify-center rounded-md text-sm font-bold";
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-12 w-10 shrink-0 flex-col overflow-hidden rounded-md border border-slate-300 text-[0.6rem] font-semibold text-slate-600"
+          aria-hidden="true"
+        >
+          <span className="flex flex-1 items-center justify-center border-b border-slate-300 bg-slate-100">matin</span>
+          <span className="flex flex-1 items-center justify-center">a-midi</span>
+        </span>
+        <p className="text-base text-slate-700">
+          Dans chaque jour : le <strong>matin en haut</strong>, l&apos;<strong>après-midi en bas</strong>. Touchez un
+          jour pour le détail.
+        </p>
+      </div>
+
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {caregivers.map((c) => (
+          <li key={c.id} className="flex items-center gap-2 text-base text-slate-800">
+            <span className={`${swatch} text-white`} style={{ backgroundColor: c.color }} aria-hidden="true">
+              {initials.get(c.id)}
+            </span>
+            {c.firstName}
+          </li>
+        ))}
+        {types.length > 0 && (
+          <li className="col-span-2 flex items-center gap-2 text-base text-slate-800">
+            <span className={`${swatch} bg-slate-200`} aria-hidden="true" />
+            {types.map((t) => EVENT_TYPE_LABEL[t]).join(", ")}
+          </li>
+        )}
+        {anyNeeded && (
+          <li className="col-span-2 flex items-center gap-2 text-base font-semibold text-slate-900">
+            <span className={`${swatch} text-white`} style={{ background: RAINBOW }} aria-hidden="true">
+              ?
+            </span>
+            Il faut encore trouver quelqu&apos;un
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
@@ -783,27 +996,6 @@ async function NeedsList({
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-function CaregiverLegend({ caregivers }: { caregivers: { id: string; firstName: string; color: string }[] }) {
-  if (caregivers.length === 0) return null;
-  return (
-    <div className="flex shrink-0 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:w-44">
-      <p className="text-sm font-semibold text-slate-700">Qui garde :</p>
-      <div className="flex flex-row flex-wrap gap-x-4 gap-y-2 sm:flex-col">
-        {caregivers.map((caregiver) => (
-          <div key={caregiver.id} className="flex items-center gap-2 text-base text-slate-800">
-            <span
-              className="h-3 w-3 shrink-0 rounded-full"
-              style={{ backgroundColor: caregiver.color }}
-              aria-hidden="true"
-            />
-            {caregiver.firstName}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
