@@ -13,6 +13,23 @@ export function AbsenceHatch({ className = "" }: { className?: string }) {
   );
 }
 
+/** Legend line: "Absence de Mary" / "Absences de Mary et Paul". */
+export function absenceLegendLabel(names: string[]): string {
+  if (names.length <= 1) return `Absence de ${names[0] ?? ""}`;
+  return `Absences de ${names.slice(0, -1).join(", ")} et ${names[names.length - 1]}`;
+}
+
+/** Hatched swatch matching the calendar overlay, for legends. */
+export function AbsenceSwatch({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`shrink-0 border border-slate-300 ${className}`}
+      style={{ backgroundImage: ABSENCE_HATCH }}
+      aria-hidden="true"
+    />
+  );
+}
+
 /** "Mary absente" / "Mary et Paul absents". */
 export function absenceLabel(names: string[]): string {
   if (names.length === 0) return "";

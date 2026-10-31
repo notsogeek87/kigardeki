@@ -23,7 +23,7 @@ import type { EventType } from "@prisma/client";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { listAbsencesForFamily } from "@/lib/data/absences";
 import { absentCaregiversByDay } from "@/lib/absences";
-import { ABSENCE_HATCH, AbsenceHatch, absenceLabel } from "@/components/absence-display";
+import { AbsenceHatch, AbsenceSwatch, absenceLabel, absenceLegendLabel } from "@/components/absence-display";
 import { EVENT_TYPE_LABEL } from "@/lib/labels";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import {
@@ -735,8 +735,8 @@ async function MonthView({
 
   const absentNames = (key: string) =>
     (absentByDay.get(key) ?? []).map((id) => caregiverById.get(id)?.firstName).filter((n): n is string => !!n);
-  const absentIds = new Set(Array.from(absentByDay.values()).flat());
-  const absentCaregivers = caregivers.filter((c) => absentIds.has(c.id));
+  // Listed in the legend whenever their absences are tracked, even in a month without any.
+  const absentCaregivers = caregivers.filter((c) => c.tracksAbsences);
 
   const days: Date[] = [];
   for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
@@ -935,12 +935,8 @@ function MonthLegend({
         )}
         {absentCaregivers.length > 0 && (
           <li className="col-span-2 flex items-center gap-2 text-base text-slate-800">
-            <span
-              className={`${swatch} border border-slate-300`}
-              style={{ backgroundImage: ABSENCE_HATCH }}
-              aria-hidden="true"
-            />
-            {absenceLabel(absentCaregivers.map((c) => c.firstName))}
+            <AbsenceSwatch className={swatch} />
+            {absenceLegendLabel(absentCaregivers.map((c) => c.firstName))}
           </li>
         )}
       </ul>

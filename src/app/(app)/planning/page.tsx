@@ -8,7 +8,7 @@ import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel, slotsLabe
 import { deleteCareNeedAction } from "../events/care-needs-actions";
 import { listAbsences } from "@/lib/data/absences";
 import { absentCaregiversByDay } from "@/lib/absences";
-import { ABSENCE_HATCH, AbsenceHatch, absenceLabel } from "@/components/absence-display";
+import { AbsenceHatch, AbsenceSwatch, absenceLabel, absenceLegendLabel } from "@/components/absence-display";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { PlanningFilters } from "@/components/planning-filters";
@@ -529,7 +529,10 @@ async function MonthView({
             );
           })}
         </div>
-        <CaregiverLegend caregivers={caregivers} />
+        <CaregiverLegend
+          caregivers={caregivers}
+          absentNames={caregivers.filter((c) => c.tracksAbsences).map((c) => c.firstName)}
+        />
       </div>
       <p className="px-1 text-xs text-slate-400">
         Point plein = journée · moitié haute = matin · moitié basse = après-midi ·{" "}
@@ -537,19 +540,6 @@ async function MonthView({
           arc-en-ciel
         </span>{" "}
         = garde à trouver
-        {absences.length > 0 && (
-          <>
-            {" "}·{" "}
-            <span className="rounded px-1 text-slate-600" style={{ backgroundImage: ABSENCE_HATCH }}>
-              hachuré gris
-            </span>{" "}
-            = absence ({Array.from(new Set(absences.map((a) => a.caregiverId)))
-              .map((id) => caregivers.find((c) => c.id === id)?.firstName)
-              .filter(Boolean)
-              .join(", ")}
-            )
-          </>
-        )}
       </p>
     </div>
   );
@@ -570,7 +560,14 @@ function HalfDayDot({ color, morning, afternoon }: { color: string; morning: boo
   );
 }
 
-function CaregiverLegend({ caregivers }: { caregivers: { id: string; firstName: string; color: string }[] }) {
+function CaregiverLegend({
+  caregivers,
+  absentNames,
+}: {
+  caregivers: { id: string; firstName: string; color: string }[];
+  /** People whose absences are tracked: always listed, even in a month without any. */
+  absentNames: string[];
+}) {
   if (caregivers.length === 0) return null;
   return (
     <div className="flex shrink-0 flex-row flex-wrap gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:w-40 sm:flex-col">
@@ -584,6 +581,12 @@ function CaregiverLegend({ caregivers }: { caregivers: { id: string; firstName: 
           {caregiver.firstName}
         </div>
       ))}
+      {absentNames.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <AbsenceSwatch className="h-3.5 w-3.5 rounded" />
+          {absenceLegendLabel(absentNames)}
+        </div>
+      )}
     </div>
   );
 }
