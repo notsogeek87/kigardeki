@@ -11,6 +11,7 @@ export type CaregiverInput = {
   relation: CaregiverRelation;
   phone?: string | null;
   color: string;
+  tracksAbsences: boolean;
 };
 
 export async function listCaregivers(): Promise<CaregiverDTO[]> {
@@ -46,6 +47,7 @@ export async function createCaregiver(input: CaregiverInput): Promise<CaregiverD
       relation: input.relation,
       phone: encryptNullable(input.phone),
       color: input.color,
+      tracksAbsences: input.tracksAbsences,
     },
   });
   return toCaregiverDTO(row);
@@ -64,6 +66,7 @@ export async function updateCaregiver(caregiverId: string, input: CaregiverInput
       relation: input.relation,
       phone: encryptNullable(input.phone),
       color: input.color,
+      tracksAbsences: input.tracksAbsences,
     },
   });
   return toCaregiverDTO(row);

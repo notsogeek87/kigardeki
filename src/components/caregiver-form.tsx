@@ -66,6 +66,21 @@ export function CaregiverForm({
 
       <ColorPickerField defaultValue={caregiver?.color} />
 
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3">
+        <input
+          type="checkbox"
+          name="tracksAbsences"
+          defaultChecked={caregiver?.tracksAbsences ?? false}
+          className="mt-1 h-5 w-5 accent-brand-600"
+        />
+        <span className="flex flex-col">
+          <span className="text-sm font-medium text-slate-700">Suivre ses absences</span>
+          <span className="text-xs text-slate-500">
+            Permet de saisir ses périodes d&apos;absence, affichées en gris hachuré sur le calendrier du mois.
+          </span>
+        </span>
+      </label>
+
       <SubmitButton className="tap-target mt-2 rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white active:bg-brand-700">
         {submitLabel}
       </SubmitButton>

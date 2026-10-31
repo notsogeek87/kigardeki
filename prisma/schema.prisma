@@ -59,6 +59,7 @@ model Family {
   caregivers  Caregiver[]
   events      Event[]
   careNeeds   CareNeed[]
+  absences    CaregiverAbsence[]
   invitations Invitation[]
   shareLinks  ShareLink[]
 }
@@ -74,10 +75,11 @@ model User {
   familyId     String
   createdAt    DateTime @default(now())
 
-  family            Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family            Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
   caregiverProfile  Caregiver?
-  createdEvents     Event[]      @relation("EventCreatedBy")
+  createdEvents     Event[]            @relation("EventCreatedBy")
   careNeedsCreated  CareNeed[]
+  absencesCreated   CaregiverAbsence[]
   invitationsSent   Invitation[]
   shareLinksCreated ShareLink[]
 
@@ -109,23 +111,28 @@ model Child {
 }
 
 model Caregiver {
-  id        String            @id @default(cuid())
-  familyId  String
-  userId    String?           @unique
+  id             String            @id @default(cuid())
+  familyId       String
+  userId         String?           @unique
   // firstName, lastName and phone are encrypted at the application layer
   // (see src/lib/crypto.ts).
-  firstName String
-  lastName  String?
-  relation  CaregiverRelation
-  phone     String?
-  avatarUrl String?
-  color     String
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  firstName      String
+  lastName       String?
+  relation       CaregiverRelation
+  phone          String?
+  avatarUrl      String?
+  color          String
+  /// Opt-in, per person: only caregivers with this flag can be given
+  /// absences (see CaregiverAbsence). Off by default so the feature stays
+  /// limited to the one or two people it is enabled for.
+  tracksAbsences Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  family     Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  user       User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  family     Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   eventLinks EventCaregiver[]
+  absences   CaregiverAbsence[]
 
   @@index([familyId])
 }
@@ -190,6 +197,28 @@ model CareNeed {
 
   @@unique([childId, date])
   @@index([familyId, date])
+}
+
+/// A period during which a caregiver is unavailable (holidays, sick
+/// leave...). Purely informational: shown as a grey hatch on the month
+/// calendar. Only allowed on caregivers with `tracksAbsences`.
+model CaregiverAbsence {
+  id          String   @id @default(cuid())
+  familyId    String
+  caregiverId String
+  /// First absent day, stored at UTC midnight.
+  startDate   DateTime
+  /// Last absent day (inclusive), stored at UTC midnight.
+  endDate     DateTime
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  family    Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  caregiver Caregiver @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  @@index([familyId, endDate])
+  @@index([caregiverId])
 }
 
 model EventChild {

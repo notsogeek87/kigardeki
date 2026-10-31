@@ -37,6 +37,7 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
   const { createChild, updateChild, deleteChild, listChildren } = await import("@/lib/data/children");
   const { createEvent } = await import("@/lib/data/events");
   const { ForbiddenError, UnauthorizedError } = await import("@/lib/permissions");
+  const { createAbsence, deleteAbsence, listAbsences } = await import("@/lib/data/absences");
 
   const mockedAuth = vi.mocked(auth);
 
@@ -331,5 +332,30 @@ describe.skipIf(!hasDb)("permissions & family isolation", async () => {
     await prisma.event.findUniqueOrThrow({ where: { id: sharedEvent.id } });
     const sharedLinks = await prisma.eventChild.findMany({ where: { eventId: sharedEvent.id } });
     expect(sharedLinks.map((l) => l.childId)).toEqual([siblingChild.id]);
+  });
+
+  it("absences are opt-in per person, parent-only and family-isolated", async () => {
+    const day = (d: string) => new Date(`${d}T00:00:00.000Z`);
+    const mary = await prisma.caregiver.create({
+      data: { familyId: familyAId, firstName: encrypt("Mary"), relation: "NANNY", color: "#888", tracksAbsences: true },
+    });
+    const other = await prisma.caregiver.create({
+      data: { familyId: familyAId, firstName: encrypt("Other"), relation: "OTHER", color: "#999" },
+    });
+
+    mockedAuth.mockResolvedValue(sessionFor(parentA, familyAId, "PARENT"));
+    await createAbsence(mary.id, day("2026-11-02"), day("2026-11-04"));
+    await expect(createAbsence(other.id, day("2026-11-02"), day("2026-11-02"))).rejects.toThrow();
+    await expect(createAbsence(mary.id, day("2026-11-05"), day("2026-11-03"))).rejects.toThrow();
+    const listed = await listAbsences(day("2026-11-01"), day("2026-12-01"));
+    expect(listed.map((a) => [a.caregiverId, a.startDate, a.endDate])).toEqual([[mary.id, "2026-11-02", "2026-11-04"]]);
+
+    mockedAuth.mockResolvedValue(sessionFor(viewerA, familyAId, "VIEWER"));
+    await expect(createAbsence(mary.id, day("2026-11-10"), day("2026-11-10"))).rejects.toBeInstanceOf(ForbiddenError);
+
+    mockedAuth.mockResolvedValue(sessionFor(parentB, familyBId, "PARENT"));
+    await expect(createAbsence(mary.id, day("2026-11-10"), day("2026-11-10"))).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(deleteAbsence(listed[0]!.id)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await listAbsences(day("2026-11-01"), day("2026-12-01"))).toEqual([]);
   });
 });

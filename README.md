@@ -136,6 +136,13 @@ comme événement séparé si besoin) — voir `trimSupersededRecurringEvents`
 dans `src/lib/data/events.ts`. Un événement ponctuel ne modifie jamais un
 planning permanent existant.
 
+**Absences** (`CaregiverAbsence`) : une option « Suivre ses absences » sur la
+fiche d'une personne (Famille → la personne), désactivée par défaut, permet
+de saisir ses périodes d'absence (du … au …, inclus) sur cette même fiche.
+Elles apparaissent en **trame grise hachurée** sur le calendrier mensuel
+(planning et lien de partage), quel que soit le filtre enfant. L'activer
+seulement pour la ou les personnes concernées (ex. la nounou).
+
 Après l'enregistrement d'une garde, on retombe sur la vue **mois** du
 planning — voir [docs/guides/ajouter-une-garde.md](docs/guides/ajouter-une-garde.md)
 (index complet : [docs/README.md](docs/README.md)).

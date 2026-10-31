@@ -43,6 +43,7 @@ export type CaregiverDTO = {
   phone: string | null;
   avatarUrl: string | null;
   color: string;
+  tracksAbsences: boolean;
 };
 
 export function toCaregiverDTO(row: Caregiver): CaregiverDTO {
@@ -56,6 +57,7 @@ export function toCaregiverDTO(row: Caregiver): CaregiverDTO {
     phone: decryptNullable(row.phone),
     avatarUrl: row.avatarUrl,
     color: row.color,
+    tracksAbsences: row.tracksAbsences,
   };
 }
 

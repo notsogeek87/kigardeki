@@ -31,12 +31,14 @@ export async function createCaregiverAction(formData: FormData): Promise<void> {
       phone: formData.get("phone") || undefined,
       color: formData.get("color"),
     });
+    const tracksAbsences = formData.get("tracksAbsences") === "on";
     await createCaregiver({
       firstName: parsed.firstName,
       lastName: parsed.lastName ?? null,
       relation: parsed.relation as CaregiverRelation,
       phone: parsed.phone ?? null,
       color: parsed.color,
+      tracksAbsences,
     });
   } catch (error) {
     redirectWithError("/family/caregivers/new", error);
@@ -54,12 +56,14 @@ export async function updateCaregiverAction(caregiverId: string, formData: FormD
       phone: formData.get("phone") || undefined,
       color: formData.get("color"),
     });
+    const tracksAbsences = formData.get("tracksAbsences") === "on";
     await updateCaregiver(caregiverId, {
       firstName: parsed.firstName,
       lastName: parsed.lastName ?? null,
       relation: parsed.relation as CaregiverRelation,
       phone: parsed.phone ?? null,
       color: parsed.color,
+      tracksAbsences,
     });
   } catch (error) {
     redirectWithError(`/family/caregivers/${caregiverId}`, error);

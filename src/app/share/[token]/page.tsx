@@ -21,6 +21,9 @@ import {
 } from "@/components/care-need-display";
 import type { EventType } from "@prisma/client";
 import { OccurrenceCard } from "@/components/occurrence-card";
+import { listAbsencesForFamily } from "@/lib/data/absences";
+import { absentCaregiversByDay } from "@/lib/absences";
+import { ABSENCE_HATCH, AbsenceHatch, absenceLabel } from "@/components/absence-display";
 import { EVENT_TYPE_LABEL } from "@/lib/labels";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import {
@@ -662,12 +665,15 @@ async function MonthView({
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
-  const [rawOccurrences, rawNeeds] = await Promise.all([
+  const [rawOccurrences, rawNeeds, absences] = await Promise.all([
     listEventOccurrencesForFamily(familyId, gridStart, gridEnd),
     listCareNeedsForFamily(familyId, gridStart, gridEnd),
+    listAbsencesForFamily(familyId, gridStart, gridEnd),
   ]);
   const occurrences = filterOccurrences(rawOccurrences, childId, undefined);
   const needs = rawNeeds.filter((n) => !childId || n.childId === childId);
+  // Absences are per person, not per child: shown whatever the child filter.
+  const absentByDay = absentCaregiversByDay(absences, monthStart, nextMonthStart);
 
   const slotsOf = (occ: EventOccurrenceDTO) =>
     timeToSlots(toTimeInputValue(occ.occurrenceStartAt), toTimeInputValue(occ.occurrenceEndAt));
@@ -727,6 +733,11 @@ async function MonthView({
     return "rien de prévu";
   };
 
+  const absentNames = (key: string) =>
+    (absentByDay.get(key) ?? []).map((id) => caregiverById.get(id)?.firstName).filter((n): n is string => !!n);
+  const absentIds = new Set(Array.from(absentByDay.values()).flat());
+  const absentCaregivers = caregivers.filter((c) => absentIds.has(c.id));
+
   const days: Date[] = [];
   for (let d = new Date(gridStart); d < gridEnd; d = addUTCDays(d, 1)) days.push(d);
   const todayKey = toDateInputValue(new Date());
@@ -760,6 +771,7 @@ async function MonthView({
             const isPast = key < todayKey;
             const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6;
             const day = halves.get(key);
+            const absent = absentNames(key);
 
             if (!inMonth) {
               // Neighbouring months: just a faint number, no content, to keep the eye on this month.
@@ -774,12 +786,14 @@ async function MonthView({
               <Link
                 key={key}
                 href={`/share/${token}?view=day&date=${key}${query}`}
-                aria-label={`${formatDateLong(d)} — matin : ${describeHalf(day?.MORNING ?? emptyHalf())} ; après-midi : ${describeHalf(day?.AFTERNOON ?? emptyHalf())}`}
-                className={`flex h-[4.25rem] flex-col overflow-hidden rounded-lg border active:opacity-70 ${
+                aria-label={`${formatDateLong(d)}${absent.length > 0 ? ` — ${absenceLabel(absent)}` : ""} — matin : ${describeHalf(day?.MORNING ?? emptyHalf())} ; après-midi : ${describeHalf(day?.AFTERNOON ?? emptyHalf())}`}
+                className={`relative flex h-[4.25rem] flex-col overflow-hidden rounded-lg border active:opacity-70 ${
                   isToday ? "border-2 border-brand-600" : "border-slate-200"
                 } ${isWeekend ? "bg-slate-50" : "bg-white"} ${isPast && !isToday ? "opacity-50" : ""}`}
               >
-                <span className="flex h-6 shrink-0 items-center justify-center">
+                {/* Over the half-day colours, so an absence still shows on a day someone else covers. */}
+                {absent.length > 0 && <AbsenceHatch />}
+                <span className="relative flex h-6 shrink-0 items-center justify-center">
                   <span
                     className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-sm font-bold leading-none ${
                       isToday ? "bg-brand-600 text-white" : "text-slate-900"
@@ -809,6 +823,7 @@ async function MonthView({
         initials={initials}
         types={Array.from(usedTypes)}
         anyNeeded={anyNeeded}
+        absentCaregivers={absentCaregivers}
       />
     </div>
   );
@@ -870,11 +885,13 @@ function MonthLegend({
   initials,
   types,
   anyNeeded,
+  absentCaregivers,
 }: {
   caregivers: Caregivers;
   initials: Map<string, string>;
   types: EventType[];
   anyNeeded: boolean;
+  absentCaregivers: Caregivers;
 }) {
   const swatch = "flex h-7 min-w-[1.75rem] shrink-0 px-1 items-center justify-center rounded-md text-sm font-bold";
   return (
@@ -914,6 +931,16 @@ function MonthLegend({
               ?
             </span>
             Il faut encore trouver quelqu&apos;un
+          </li>
+        )}
+        {absentCaregivers.length > 0 && (
+          <li className="col-span-2 flex items-center gap-2 text-base text-slate-800">
+            <span
+              className={`${swatch} border border-slate-300`}
+              style={{ backgroundImage: ABSENCE_HATCH }}
+              aria-hidden="true"
+            />
+            {absenceLabel(absentCaregivers.map((c) => c.firstName))}
           </li>
         )}
       </ul>

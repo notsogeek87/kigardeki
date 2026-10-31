@@ -6,6 +6,9 @@ import { listEventOccurrences, type EventOccurrenceDTO } from "@/lib/data/events
 import { countUncoveredNeedDays, listCareNeeds } from "@/lib/data/care-needs";
 import { CareNeedBanner, RAINBOW, RainbowBadge, groupNeeds, needLabel, slotsLabel } from "@/components/care-need-display";
 import { deleteCareNeedAction } from "../events/care-needs-actions";
+import { listAbsences } from "@/lib/data/absences";
+import { absentCaregiversByDay } from "@/lib/absences";
+import { ABSENCE_HATCH, AbsenceHatch, absenceLabel } from "@/components/absence-display";
 import { timeToSlots, type TimeSlot } from "@/lib/time-slots";
 import { OccurrenceCard } from "@/components/occurrence-card";
 import { PlanningFilters } from "@/components/planning-filters";
@@ -447,12 +450,17 @@ async function MonthView({
   const gridStart = startOfUTCWeek(monthStart);
   const gridEnd = addUTCDays(startOfUTCWeek(addUTCDays(nextMonthStart, 6)), 7);
 
-  const [rawOccurrences, rawNeeds] = await Promise.all([
+  const [rawOccurrences, rawNeeds, absences] = await Promise.all([
     listEventOccurrences(gridStart, gridEnd),
     listCareNeeds(gridStart, gridEnd),
+    listAbsences(gridStart, gridEnd),
   ]);
   const occurrences = filterOccurrences(rawOccurrences, childId, undefined);
   const needsByDay = groupNeeds(rawNeeds.filter((n) => !childId || n.childId === childId), occurrences);
+  // Absences are per person, not per child: shown whatever the child filter.
+  const absentByDay = absentCaregiversByDay(absences, gridStart, gridEnd);
+  const absentNames = (key: string) =>
+    (absentByDay.get(key) ?? []).map((id) => caregivers.find((c) => c.id === id)?.firstName).filter((n): n is string => !!n);
   const FALLBACK_COLOR = "#6366f1";
   // Per day: which half-days each caregiver colour covers.
   const dotsByDay = new Map<string, Map<string, Set<TimeSlot>>>();
@@ -496,16 +504,19 @@ async function MonthView({
             const dayDots = Array.from(dotsByDay.get(key) ?? []);
             const need = needsByDay.get(key);
             const rainbow = need?.uncovered ?? false;
+            const absent = absentNames(key);
+            const title = [need ? needLabel(need, children_) : "", absenceLabel(absent)].filter(Boolean).join(" · ");
             return (
               <Link
                 key={key}
                 href={`/planning?view=day&date=${key}${query}`}
-                className={`tap-target flex flex-col items-center justify-center rounded-lg py-2 text-sm ${
+                className={`tap-target relative isolate flex flex-col items-center justify-center overflow-hidden rounded-lg py-2 text-sm ${
                   rainbow ? "font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-300"
                 }`}
                 style={rainbow ? { background: RAINBOW } : undefined}
-                title={need ? needLabel(need, children_) : undefined}
+                title={title || undefined}
               >
+                {absent.length > 0 && <AbsenceHatch className={`-z-10 ${inMonth ? "" : "opacity-40"}`} />}
                 {d.getUTCDate()}
                 {dayDots.length > 0 && (
                   <span className="mt-0.5 flex items-center gap-0.5">
@@ -526,6 +537,19 @@ async function MonthView({
           arc-en-ciel
         </span>{" "}
         = garde à trouver
+        {absences.length > 0 && (
+          <>
+            {" "}·{" "}
+            <span className="rounded px-1 text-slate-600" style={{ backgroundImage: ABSENCE_HATCH }}>
+              hachuré gris
+            </span>{" "}
+            = absence ({Array.from(new Set(absences.map((a) => a.caregiverId)))
+              .map((id) => caregivers.find((c) => c.id === id)?.firstName)
+              .filter(Boolean)
+              .join(", ")}
+            )
+          </>
+        )}
       </p>
     </div>
   );
