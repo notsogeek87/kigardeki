@@ -41,14 +41,17 @@ export async function listAbsencesForFamily(
   return rows.map(toDTO);
 }
 
-/** One caregiver's absences that are not over yet, soonest first. */
-export async function listUpcomingAbsences(caregiverId: string, today: Date): Promise<AbsenceDTO[]> {
+/**
+ * All of one caregiver's absences, latest first — past ones included, so an
+ * absence entered for dates already gone can still be seen and removed.
+ */
+export async function listCaregiverAbsences(caregiverId: string): Promise<AbsenceDTO[]> {
   const user = await requireSession();
   const caregiver = await prisma.caregiver.findUniqueOrThrow({ where: { id: caregiverId } });
   assertSameFamily(user, caregiver.familyId);
   const rows = await prisma.caregiverAbsence.findMany({
-    where: { caregiverId, endDate: { gte: today } },
-    orderBy: { startDate: "asc" },
+    where: { caregiverId },
+    orderBy: { startDate: "desc" },
   });
   return rows.map(toDTO);
 }

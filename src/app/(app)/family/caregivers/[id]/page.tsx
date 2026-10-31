@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireParentPage } from "@/lib/permissions";
 import { getCaregiver } from "@/lib/data/caregivers";
-import { listUpcomingAbsences } from "@/lib/data/absences";
+import { listCaregiverAbsences } from "@/lib/data/absences";
 import { CaregiverForm } from "@/components/caregiver-form";
 import { SubmitButton } from "@/components/submit-button";
-import { formatDateLong, startOfUTCDay, toDateInputValue } from "@/lib/wall-time";
+import { formatDateLong, toDateInputValue } from "@/lib/wall-time";
 import type { AbsenceDTO } from "@/lib/absences";
 import { updateCaregiverAction, deleteCaregiverAction } from "../../actions";
 import { createAbsenceAction, deleteAbsenceAction } from "../../absences-actions";
@@ -24,7 +24,7 @@ export default async function EditCaregiverPage({
 
   const update = updateCaregiverAction.bind(null, id);
   const remove = deleteCaregiverAction.bind(null, id);
-  const absences = caregiver.tracksAbsences ? await listUpcomingAbsences(id, startOfUTCDay(new Date())) : [];
+  const absences = caregiver.tracksAbsences ? await listCaregiverAbsences(id) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,7 +51,7 @@ const inputClass =
 
 function periodLabel(absence: AbsenceDTO): string {
   const start = formatDateLong(new Date(`${absence.startDate}T00:00:00.000Z`));
-  if (absence.startDate === absence.endDate) return start;
+  if (absence.startDate === absence.endDate) return start.charAt(0).toUpperCase() + start.slice(1);
   return `Du ${start} au ${formatDateLong(new Date(`${absence.endDate}T00:00:00.000Z`))}`;
 }
 
@@ -71,16 +71,19 @@ function AbsencesSection({
       <h2 className="text-base font-bold text-slate-900">Absences de {firstName}</h2>
 
       {absences.length === 0 ? (
-        <p className="text-sm text-slate-500">Aucune absence à venir.</p>
+        <p className="text-sm text-slate-500">Aucune absence enregistrée.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {absences.map((absence) => (
             <li key={absence.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
-              <span className="flex-1 text-sm capitalize text-slate-700">{periodLabel(absence)}</span>
+              <span className={`flex-1 text-sm text-slate-700 ${absence.endDate < today ? "opacity-50" : ""}`}>
+                {periodLabel(absence)}
+                {absence.endDate < today && " (passée)"}
+              </span>
               <form action={deleteAbsenceAction.bind(null, caregiverId, absence.id)}>
                 <button
                   type="submit"
-                  className="tap-target rounded-full px-2 text-sm text-slate-400 active:bg-slate-100"
+                  className="tap-target rounded-full px-3 text-xl leading-none text-slate-500 active:bg-slate-200"
                   aria-label={`Retirer l'absence : ${periodLabel(absence)}`}
                   title="Retirer"
                 >

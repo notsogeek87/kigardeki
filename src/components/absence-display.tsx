@@ -1,6 +1,6 @@
 /** Grey diagonal hatch painted over a calendar day when someone is absent. */
 export const ABSENCE_HATCH =
-  "repeating-linear-gradient(135deg, rgba(71, 85, 105, 0.35) 0 3px, transparent 3px 7px)";
+  "repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.16) 0 3px, transparent 3px 7px)";
 
 /** Overlay covering its (relatively positioned) parent with the absence hatch. */
 export function AbsenceHatch({ className = "" }: { className?: string }) {
