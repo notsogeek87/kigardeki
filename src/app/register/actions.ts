@@ -38,7 +38,7 @@ export async function registerAction(formData: FormData): Promise<void> {
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/today",
+      redirectTo: "/planning",
     });
   } catch (error) {
     if (error instanceof AuthError) {

@@ -35,7 +35,7 @@ export async function acceptInvitationAction(token: string, formData: FormData):
   }
 
   try {
-    await signIn("credentials", { email, password: parsed.data.password, redirectTo: "/today" });
+    await signIn("credentials", { email, password: parsed.data.password, redirectTo: "/planning" });
   } catch (error) {
     if (error instanceof AuthError) redirect("/login");
     throw error;

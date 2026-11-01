@@ -2,7 +2,7 @@
   "name": "Kigardeki — Planning familial",
   "short_name": "Kigardeki",
   "description": "Le planning familial des enfants, des écoles, des crèches et des gardes.",
-  "start_url": "/today",
+  "start_url": "/planning",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

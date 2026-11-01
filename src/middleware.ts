@@ -54,7 +54,7 @@ export default auth((req) => {
     loginUrl.searchParams.set("callbackUrl", pathname);
     response = NextResponse.redirect(loginUrl);
   } else if (req.auth && (pathname === "/login" || pathname === "/register")) {
-    response = NextResponse.redirect(new URL("/today", req.nextUrl.origin));
+    response = NextResponse.redirect(new URL("/planning", req.nextUrl.origin));
   } else {
     response = NextResponse.next({ request: { headers: requestHeaders } });
   }

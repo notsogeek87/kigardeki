@@ -50,7 +50,7 @@ export default async function PlanningPage({
   const params = await searchParams;
   const user = await requireSession();
   const view: View =
-    params.view === "day" || params.view === "month" || params.view === "needs" ? params.view : "week";
+    params.view === "day" || params.view === "week" || params.view === "needs" ? params.view : "month";
   const anchor = parseDate(params.date);
   const childId = params.child || undefined;
   const caregiverId = params.caregiver || undefined;
