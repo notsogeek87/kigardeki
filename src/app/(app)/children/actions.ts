@@ -52,7 +52,7 @@ export async function createChildAction(formData: FormData): Promise<void> {
     redirectPath("", error);
   }
   revalidatePath("/children");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   revalidatePath("/planning");
   redirect("/children");
 }
@@ -65,7 +65,7 @@ export async function updateChildAction(childId: string, formData: FormData): Pr
     redirectPath(childId, error);
   }
   revalidatePath("/children");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   redirect("/children");
 }
 
@@ -76,6 +76,6 @@ export async function deleteChildAction(childId: string): Promise<void> {
     redirectPath(childId, error);
   }
   revalidatePath("/children");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   redirect("/children");
 }

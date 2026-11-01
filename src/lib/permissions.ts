@@ -50,7 +50,7 @@ export async function requireParent(): Promise<SessionUser> {
  * admin URL lands back on a normal page instead of an error screen. This is
  * a UX nicety on top of, never a replacement for, the server action checks.
  */
-export async function requireParentPage(redirectTo = "/today"): Promise<SessionUser> {
+export async function requireParentPage(redirectTo = "/aujourdhui"): Promise<SessionUser> {
   const session = await auth();
   if (!session?.user || session.user.role !== "PARENT") {
     redirect(redirectTo);

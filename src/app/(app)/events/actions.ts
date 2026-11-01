@@ -91,7 +91,7 @@ export async function createEventAction(formData: FormData): Promise<void> {
     redirectWithError("/events/new", error);
   }
   revalidatePath("/planning");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   redirect(monthPlanningPath(formData));
 }
 
@@ -103,7 +103,7 @@ export async function updateEventAction(eventId: string, formData: FormData): Pr
     redirectWithError(`/events/${eventId}/edit`, error);
   }
   revalidatePath("/planning");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   redirect(monthPlanningPath(formData));
 }
 
@@ -114,6 +114,6 @@ export async function deleteEventAction(eventId: string): Promise<void> {
     redirectWithError(`/events/${eventId}/edit`, error);
   }
   revalidatePath("/planning");
-  revalidatePath("/today");
+  revalidatePath("/aujourdhui");
   redirect(monthPlanningPath());
 }
