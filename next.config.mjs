@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // No /_next/image optimizer: the app only ships its own small PNG logo,
+  // and the optimizer endpoint is where Next.js 14's published remote-code-
+  // execution and DoS advisories live.
+  images: { unoptimized: true },
   experimental: {
     // Cache client court : les server actions appellent revalidatePath /
     // revalidateTag après chaque modification (ce qui vide ce cache), il ne
